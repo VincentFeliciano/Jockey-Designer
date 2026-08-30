@@ -38,17 +38,12 @@ body {
   background-color: #202040;
   opacity: 0.5;
 }
-#jockey-wrap {
-  transform-origin: center center;
-  transition: none;
-  will-change: transform;
-}
 #jockey-svg {
   position: relative;
   max-height: 90vh;
   max-width: 100%;
   filter: drop-shadow(0 8px 32px rgba(0,0,0,0.7));
-  display: block;
+  overflow: visible;
 }
 #canvas-area.panning { cursor: grabbing !important; }
 #canvas-area:not(.panning) { cursor: grab; }
@@ -414,7 +409,6 @@ input[type="range"] {
     <button class="zoom-btn" onclick="zoomStep(1/1.2)" title="Zoom out">−</button>
     <button class="zoom-btn" onclick="resetView()" title="Reset view" style="font-size:13px;">⌖</button>
   </div>
-  <div id="jockey-wrap">
   <svg id="jockey-svg" viewBox="0 0 2550 3300" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
     <defs id="svg-defs"></defs>
 
@@ -644,7 +638,6 @@ input[type="range"] {
       <use id="sel-use" href="" style="fill:none;stroke:#00d4ff;stroke-width:12px;opacity:0.9;"/>
     </g>
   </svg>
-  </div><!-- /#jockey-wrap -->
 </div>
 
 <!-- ── Side Panel ── -->
@@ -760,12 +753,40 @@ input[type="range"] {
 
         <div class="section-label">Transform</div>
 
-        <div class="slider-row">
+        <div class="slider-row" id="pat-size-row">
           <div class="slider-header">
             <label>Size</label>
             <span class="val" id="val-size">20</span>
           </div>
           <input type="range" id="pat-size" min="4" max="80" value="20" oninput="onSlider('size',this.value)">
+        </div>
+
+        <!-- Stripe-specific controls (shown only for stripe pattern types) -->
+        <div id="stripe-controls" style="display:none;">
+          <hr class="divider">
+          <div class="section-label">Stripe Options</div>
+          <div class="slider-row" id="stripe-count-row">
+            <div class="slider-header">
+              <label>Count</label>
+              <span class="val" id="val-stripe-count">1</span>
+            </div>
+            <input type="range" id="stripe-count" min="1" max="20" value="1" oninput="onStripeSlider('stripeCount',this.value)">
+          </div>
+          <div class="slider-row">
+            <div class="slider-header">
+              <label id="stripe-thickness-label">Width %</label>
+              <span class="val" id="val-stripe-thickness">50</span>
+            </div>
+            <input type="range" id="stripe-thickness" min="5" max="95" value="50" oninput="onStripeSlider('stripeThickness',this.value)">
+          </div>
+          <div class="slider-row" id="stripe-spacing-row">
+            <div class="slider-header">
+              <label id="stripe-spacing-label">Spacing</label>
+              <span class="val" id="val-stripe-spacing">50</span>
+            </div>
+            <input type="range" id="stripe-spacing" min="2" max="95" value="50" oninput="onStripeSlider('stripeSpacing',this.value)">
+          </div>
+          <hr class="divider">
         </div>
 
         <div class="slider-row">
@@ -874,7 +895,7 @@ const PARTS = {
                 presets: ['#8B4513','#A0522D','#6B3A2A','#D2691E','#CD853F','#DEB887','#C4A265','#7B3F00'] },
   pants:      { label: 'Pants',           defaultFill: '#ffffff',
                 presets: ['#ffffff','#f5f5f5','#e8e8e8','#dde8ff','#ddffd8','#fff8dd','#ffd8e8','#d0d0d0'] },
-  sleeves:    { label: 'Sleeves',         defaultFill: '#ff0e0e', targets: ['part-rsleeve', 'part-lsleeve'],
+  sleeves:    { label: 'Sleeves',         defaultFill: '#ff0e0e', targets: ['part-rsleeve', 'part-lsleeve'], mirrorPattern: true,
                 presets: ['#FF0000','#0000FF','#FFFF00','#ffffff','#000000','#00AA00','#FF6600','#800080'] },
   shirt:      { label: 'Shirt',           defaultFill: '#ff0e0e',
                 presets: ['#FF0000','#0000FF','#FFFF00','#ffffff','#000000','#00AA00','#FF6600','#800080'] },
@@ -920,6 +941,9 @@ Object.keys(PARTS).forEach(id => {
     rot: 0,
     ox: 0,
     oy: 0,
+    stripeCount: 1,
+    stripeThickness: 50,
+    stripeSpacing: 50,
   };
 });
 
@@ -955,32 +979,44 @@ function makePatternSVG(id, s) {
   let w, h, inner;
 
   switch (s.patType) {
-    case 'hstripes':
-      w = sz; h = sz;
-      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
-               <rect width="${w}" height="${h/2}" fill="${c2}"/>`;
+    case 'hstripes': {
+      // objectBoundingBox: tile height = 1/count, stripe height = widthPct * tileH
+      const N = s.stripeCount || 1;
+      const wp = Math.max(0.05, Math.min(0.95, (s.stripeThickness || 50) / 100));
+      w = 1; h = 1 / N;
+      inner = `<rect width="1" height="${h}" fill="${c1}"/>
+               <rect x="0" y="0" width="1" height="${h * wp}" fill="${c2}"/>`;
       break;
-    case 'vstripes':
-      w = sz; h = sz;
-      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
-               <rect width="${w/2}" height="${h}" fill="${c2}"/>`;
+    }
+    case 'vstripes': {
+      const N = s.stripeCount || 1;
+      const wp = Math.max(0.05, Math.min(0.95, (s.stripeThickness || 50) / 100));
+      w = 1 / N; h = 1;
+      inner = `<rect width="${w}" height="1" fill="${c1}"/>
+               <rect x="0" y="0" width="${w * wp}" height="1" fill="${c2}"/>`;
       break;
+    }
     case 'dstripes45': {
-      w = sz; h = sz;
-      const sw = sz / 2;
+      // userSpaceOnUse line-based diagonal — spacing and thickness in SVG units
+      const T = s.stripeThickness || 50;
+      const Sp = s.stripeSpacing || 50;
+      const period = T + Sp;
+      w = period; h = period;
       inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
-               <line x1="${-w}" y1="${h}" x2="${w}" y2="${-h}" stroke="${c2}" stroke-width="${sw}"/>
-               <line x1="0" y1="${h}" x2="${w*2}" y2="${-h}" stroke="${c2}" stroke-width="${sw}"/>
-               <line x1="${-w*2}" y1="${h}" x2="0" y2="${-h}" stroke="${c2}" stroke-width="${sw}"/>`;
+               <line x1="${-w}" y1="${h}" x2="${w}" y2="${-h}" stroke="${c2}" stroke-width="${T}"/>
+               <line x1="0"    y1="${h}" x2="${w*2}" y2="${-h}" stroke="${c2}" stroke-width="${T}"/>
+               <line x1="${-w*2}" y1="${h}" x2="0" y2="${-h}" stroke="${c2}" stroke-width="${T}"/>`;
       break;
     }
     case 'dstripes135': {
-      w = sz; h = sz;
-      const sw2 = sz / 2;
+      const T = s.stripeThickness || 50;
+      const Sp = s.stripeSpacing || 50;
+      const period = T + Sp;
+      w = period; h = period;
       inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
-               <line x1="0" y1="0" x2="${w*2}" y2="${h*2}" stroke="${c2}" stroke-width="${sw2}"/>
-               <line x1="${-w}" y1="0" x2="${w}" y2="${h*2}" stroke="${c2}" stroke-width="${sw2}"/>
-               <line x1="${w}" y1="0" x2="${w*3}" y2="${h*2}" stroke="${c2}" stroke-width="${sw2}"/>`;
+               <line x1="0"    y1="0" x2="${w*2}" y2="${h*2}"  stroke="${c2}" stroke-width="${T}"/>
+               <line x1="${-w}" y1="0" x2="${w}"   y2="${h*2}"  stroke="${c2}" stroke-width="${T}"/>
+               <line x1="${w}"  y1="0" x2="${w*3}" y2="${h*2}"  stroke="${c2}" stroke-width="${T}"/>`;
       break;
     }
     case 'grid': {
@@ -1051,7 +1087,18 @@ function buildPatternEl(patId, s) {
   pat.setAttribute('patternUnits', 'userSpaceOnUse');
   pat.setAttribute('width', w);
   pat.setAttribute('height', h);
-  pat.setAttribute('patternTransform', `translate(${s.ox},${s.oy}) rotate(${s.rot})`);
+  // H/V stripes use objectBoundingBox so count = exact visible stripe count
+  const isOBB = s.patType === 'hstripes' || s.patType === 'vstripes';
+  if (isOBB) {
+    pat.setAttribute('patternUnits', 'objectBoundingBox');
+    pat.setAttribute('patternContentUnits', 'objectBoundingBox');
+    const ox = s.ox / 1000, oy = s.oy / 1000; // fine offset in bbox units
+    pat.setAttribute('patternTransform', `translate(${ox},${oy}) rotate(${s.rot})`);
+  } else {
+    pat.setAttribute('patternUnits', 'userSpaceOnUse');
+    pat.setAttribute('patternContentUnits', 'userSpaceOnUse');
+    pat.setAttribute('patternTransform', `translate(${s.ox},${s.oy}) rotate(${s.rot})`);
+  }
   pat.innerHTML = inner;
   return pat;
 }
@@ -1136,30 +1183,35 @@ function applyFill(id) {
   const groups = getTargetGroups(id);
   if (!groups.length) return;
   const s = state[id];
-  const shapes = groups.flatMap(g => [...g.querySelectorAll('path, ellipse, rect, circle, polygon, polyline')]);
+  const part = PARTS[id];
 
   if (s.mode === 'solid') {
     removePatternDef(id);
-    if (PARTS[id].strokeOnly) {
-      shapes.forEach(el => el.style.stroke = s.solidColor);
-    } else {
-      shapes.forEach(el => el.style.fill = s.solidColor);
-    }
+    groups.forEach(g => {
+      g.querySelectorAll('path, ellipse, rect, circle, polygon, polyline').forEach(el => {
+        if (part.strokeOnly) el.style.stroke = s.solidColor;
+        else el.style.fill = s.solidColor;
+      });
+    });
   } else {
-    const patId = 'pat-' + id;
     removePatternDef(id);
-
-    const patEl = buildPatternEl(patId, s);
     const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     wrapper.id = 'patdef-' + id;
-    wrapper.appendChild(patEl);
-    document.getElementById('svg-defs').appendChild(wrapper);
 
-    if (PARTS[id].strokeOnly) {
-      shapes.forEach(el => el.style.stroke = `url(#${patId})`);
-    } else {
-      shapes.forEach(el => el.style.fill = `url(#${patId})`);
-    }
+    groups.forEach((g, i) => {
+      const patId = `pat-${id}-${i}`;
+      // Mirror rotation for every alternate group when mirrorPattern is set
+      const sMirror = (part.mirrorPattern && i > 0)
+        ? Object.assign({}, s, { rot: -s.rot, ox: -s.ox })
+        : s;
+      wrapper.appendChild(buildPatternEl(patId, sMirror));
+      g.querySelectorAll('path, ellipse, rect, circle, polygon, polyline').forEach(el => {
+        if (part.strokeOnly) el.style.stroke = `url(#${patId})`;
+        else el.style.fill = `url(#${patId})`;
+      });
+    });
+
+    document.getElementById('svg-defs').appendChild(wrapper);
   }
 
   updateSwatch(id);
@@ -1246,6 +1298,7 @@ function selectPart(id) {
   document.querySelectorAll('.pat-thumb').forEach(b => {
     b.classList.toggle('active', b.dataset.pat === s.patType);
   });
+  updateStripeControls();
 
   // Update selection highlight
   updateSelectionHighlight(id);
@@ -1287,6 +1340,7 @@ function setMode(mode) {
   document.getElementById('solid-section').style.display = mode === 'solid' ? 'block' : 'none';
   document.getElementById('pattern-section').style.display = mode === 'pattern' ? 'block' : 'none';
   applyFill(selected);
+  updateStripeControls();
 }
 
 function onSolidColorChange(val) {
@@ -1476,6 +1530,68 @@ function onPatternChange() {
   applyFill(selected);
 }
 
+const STRIPE_PATTERNS = new Set(['hstripes','vstripes','dstripes45','dstripes135']);
+
+function updateStripeControls() {
+  if (!selected) return;
+  const s = state[selected];
+  const show = s.mode === 'pattern' && STRIPE_PATTERNS.has(s.patType);
+  document.getElementById('stripe-controls').style.display = show ? 'block' : 'none';
+  // Hide generic size slider when a stripe pattern is active (size not used for stripes)
+  document.getElementById('pat-size-row').style.display = show ? 'none' : 'flex';
+  if (!show) return;
+
+  const isOBB = s.patType === 'hstripes' || s.patType === 'vstripes';
+  // Count row: only for H/V OBB stripes
+  document.getElementById('stripe-count-row').style.display = isOBB ? 'flex' : 'none';
+  // Spacing row: shown for all stripe types
+  document.getElementById('stripe-spacing-row').style.display = 'flex';
+  // Relabel sliders contextually
+  document.getElementById('stripe-thickness-label').textContent = isOBB ? 'Stripe %' : 'Thickness';
+  document.getElementById('stripe-spacing-label').textContent = isOBB ? 'Gap %' : 'Spacing';
+  // For OBB stripes, cap spacing slider to complement thickness (stripe+gap <= 95)
+  const spacingInput = document.getElementById('stripe-spacing');
+  if (isOBB) {
+    spacingInput.min = 5;
+    spacingInput.max = 95;
+  } else {
+    spacingInput.min = 2;
+    spacingInput.max = 300;
+  }
+
+  document.getElementById('stripe-count').value = s.stripeCount;
+  document.getElementById('stripe-thickness').value = s.stripeThickness;
+  document.getElementById('stripe-spacing').value = s.stripeSpacing;
+  document.getElementById('val-stripe-count').textContent = s.stripeCount;
+  document.getElementById('val-stripe-thickness').textContent = isOBB ? s.stripeThickness + '%' : s.stripeThickness;
+  document.getElementById('val-stripe-spacing').textContent = isOBB ? s.stripeSpacing + '%' : s.stripeSpacing;
+}
+
+function onStripeSlider(prop, val) {
+  if (!selected) return;
+  const num = parseInt(val);
+  state[selected][prop] = num;
+  const isOBB = state[selected].patType === 'hstripes' || state[selected].patType === 'vstripes';
+  // For OBB stripes, thickness and spacing are complementary (sum = 100%)
+  if (isOBB) {
+    if (prop === 'stripeThickness') {
+      const gap = Math.max(5, Math.min(95, 100 - num));
+      state[selected].stripeSpacing = gap;
+      document.getElementById('stripe-spacing').value = gap;
+      document.getElementById('val-stripe-spacing').textContent = gap + '%';
+    } else if (prop === 'stripeSpacing') {
+      const stripe = Math.max(5, Math.min(95, 100 - num));
+      state[selected].stripeThickness = stripe;
+      document.getElementById('stripe-thickness').value = stripe;
+      document.getElementById('val-stripe-thickness').textContent = stripe + '%';
+    }
+  }
+  const labelMap = { stripeCount: 'val-stripe-count', stripeThickness: 'val-stripe-thickness', stripeSpacing: 'val-stripe-spacing' };
+  const suffix = (isOBB && (prop === 'stripeThickness' || prop === 'stripeSpacing')) ? '%' : '';
+  document.getElementById(labelMap[prop]).textContent = num + suffix;
+  if (state[selected].mode === 'pattern') applyFill(selected);
+}
+
 function onSlider(prop, val) {
   if (!selected) return;
   const num = parseFloat(val);
@@ -1593,6 +1709,7 @@ function buildPatternGrid() {
       div.classList.add('active');
       state[selected].patType = p.id;
       applyFill(selected);
+      updateStripeControls();
     };
     grid.appendChild(div);
   });
@@ -1642,40 +1759,44 @@ function init() {
 init();
 
 // ─────────────────────────────────────────────
-// Zoom & Pan
+// Zoom & Pan (viewBox-based — stays crisp at any zoom)
 // ─────────────────────────────────────────────
-const viewState = { zoom: 1, tx: 0, ty: 0 };
+const SVG_W = 2550, SVG_H = 3300;
+const viewState = { zoom: 1, panX: 0, panY: 0 };
 
 function applyViewTransform() {
-  document.getElementById('jockey-wrap').style.transform =
-    `translate(${viewState.tx}px, ${viewState.ty}px) scale(${viewState.zoom})`;
+  const vw = SVG_W / viewState.zoom;
+  const vh = SVG_H / viewState.zoom;
+  const vx = (SVG_W - vw) / 2 - viewState.panX;
+  const vy = (SVG_H - vh) / 2 - viewState.panY;
+  document.getElementById('jockey-svg').setAttribute('viewBox', `${vx} ${vy} ${vw} ${vh}`);
   document.getElementById('zoom-label').textContent = Math.round(viewState.zoom * 100) + '%';
 }
 
 function zoomStep(factor) {
-  viewState.zoom = Math.max(0.1, Math.min(8, viewState.zoom * factor));
+  viewState.zoom = Math.max(0.5, Math.min(2, viewState.zoom * factor));
   applyViewTransform();
 }
 
 function resetView() {
-  viewState.zoom = 1; viewState.tx = 0; viewState.ty = 0;
+  viewState.zoom = 1; viewState.panX = 0; viewState.panY = 0;
   applyViewTransform();
 }
 
 (function initZoomPan() {
   const area = document.getElementById('canvas-area');
-  let panning = false, panStartX = 0, panStartY = 0, panOriginTx = 0, panOriginTy = 0, moved = false;
+  let panning = false, panStartX = 0, panStartY = 0, panOriginX = 0, panOriginY = 0, moved = false;
 
-  // Wheel to zoom toward cursor
+  function svgUnitsPerPixel() {
+    const rect = document.getElementById('jockey-svg').getBoundingClientRect();
+    return { sx: (SVG_W / viewState.zoom) / rect.width, sy: (SVG_H / viewState.zoom) / rect.height };
+  }
+
+  // Wheel to zoom around center
   area.addEventListener('wheel', e => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
-    const rect = area.getBoundingClientRect();
-    const cx = e.clientX - rect.left - rect.width / 2;
-    const cy = e.clientY - rect.top  - rect.height / 2;
-    viewState.tx = cx * (1 - factor) + viewState.tx * factor;
-    viewState.ty = cy * (1 - factor) + viewState.ty * factor;
-    viewState.zoom = Math.max(0.1, Math.min(8, viewState.zoom * factor));
+    viewState.zoom = Math.max(0.5, Math.min(2, viewState.zoom * factor));
     applyViewTransform();
   }, { passive: false });
 
@@ -1685,7 +1806,7 @@ function resetView() {
     if (e.button !== 0) return;
     panning = true; moved = false;
     panStartX = e.clientX; panStartY = e.clientY;
-    panOriginTx = viewState.tx; panOriginTy = viewState.ty;
+    panOriginX = viewState.panX; panOriginY = viewState.panY;
     area.classList.add('panning');
   });
 
@@ -1694,8 +1815,9 @@ function resetView() {
     const dx = e.clientX - panStartX, dy = e.clientY - panStartY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
     if (!moved) return;
-    viewState.tx = panOriginTx + dx;
-    viewState.ty = panOriginTy + dy;
+    const { sx, sy } = svgUnitsPerPixel();
+    viewState.panX = panOriginX + dx * sx;
+    viewState.panY = panOriginY + dy * sy;
     applyViewTransform();
   });
 
