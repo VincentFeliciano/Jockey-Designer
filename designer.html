@@ -777,7 +777,7 @@ input[type="range"] {
               <label id="stripe-thickness-label">Width %</label>
               <span class="val" id="val-stripe-thickness">50</span>
             </div>
-            <input type="range" id="stripe-thickness" min="5" max="95" value="50" oninput="onStripeSlider('stripeThickness',this.value)">
+            <input type="range" id="stripe-thickness" min="1" max="200" value="50" oninput="onStripeSlider('stripeThickness',this.value)">
           </div>
           <div class="slider-row" id="stripe-spacing-row">
             <div class="slider-header">
@@ -1107,27 +1107,38 @@ function buildPatternEl(patId, s) {
   return pat;
 }
 
-// H/V stripe pattern in userSpaceOnUse coords — used for mirror parts (sleeves)
-// so both elements share one pattern at the same scale and look identical
+// H/V stripe pattern in userSpaceOnUse coords.
+// stripeThickness and stripeSpacing are fully independent:
+//   ref = bbox dimension / count  (base unit per stripe cycle at default settings)
+//   stripeSize = (T/100) * ref    (absolute width of colored stripe)
+//   gapSize    = (Sp/100) * ref   (absolute gap between stripes)
+//   period     = stripeSize + gapSize  (tile size, changes with gap without affecting stripe)
 function buildPatternElUSS(patId, s, refGroup) {
   const bbox = refGroup.getBBox();
-  const N = s.stripeCount || 1;
-  const T = Math.max(1, s.stripeThickness || 50);
-  const Sp = Math.max(1, s.stripeSpacing || 50);
-  const ratio = T / (T + Sp);
+  const N = Math.max(1, s.stripeCount || 1);
+  const T  = Math.max(1, s.stripeThickness || 50);
+  const Sp = Math.max(1, s.stripeSpacing   || 50);
   const c1 = s.c1, c2 = s.c2;
 
   let tileW, tileH, inner;
   if (s.patType === 'hstripes') {
+    const ref       = bbox.height / N;
+    const stripeH   = (T  / 100) * ref;
+    const gapH      = (Sp / 100) * ref;
+    const period    = stripeH + gapH;
     tileW = bbox.width;
-    tileH = bbox.height / N;
+    tileH = period;
     inner = `<rect width="${tileW}" height="${tileH}" fill="${c1}"/>
-             <rect x="0" y="0" width="${tileW}" height="${tileH * ratio}" fill="${c2}"/>`;
+             <rect x="0" y="0" width="${tileW}" height="${stripeH}" fill="${c2}"/>`;
   } else { // vstripes
-    tileW = bbox.width / N;
+    const ref       = bbox.width / N;
+    const stripeW   = (T  / 100) * ref;
+    const gapW      = (Sp / 100) * ref;
+    const period    = stripeW + gapW;
+    tileW = period;
     tileH = bbox.height;
     inner = `<rect width="${tileW}" height="${tileH}" fill="${c1}"/>
-             <rect x="0" y="0" width="${tileW * ratio}" height="${tileH}" fill="${c2}"/>`;
+             <rect x="0" y="0" width="${stripeW}" height="${tileH}" fill="${c2}"/>`;
   }
 
   const ns = 'http://www.w3.org/2000/svg';
@@ -1243,25 +1254,24 @@ function applyFill(id) {
 
     groups.forEach((g, i) => {
       const patId = `pat-${id}-${i}`;
-      if (part.mirrorPattern && i > 0) {
-        // Mirror: H/V stripes use USS based on group-0 bbox (same tile size), opposite rotation
-        //         Diagonal stripes swap direction (45↔135) and negate extra rotation
-        if (isHVStripe) {
-          const sMirror = Object.assign({}, s, { rot: -s.rot, ox: -s.ox });
-          wrapper.appendChild(buildPatternElUSS(patId, sMirror, groups[0]));
-        } else {
+      if (isHVStripe) {
+        // Always USS for H/V stripes: independent width & gap, same coords as SVG elements
+        // Mirror parts (sleeves): both reference group-0 bbox so stripe sizes match
+        const refGroup = part.mirrorPattern ? groups[0] : g;
+        const sForGroup = (part.mirrorPattern && i > 0)
+          ? Object.assign({}, s, { rot: -s.rot, ox: -s.ox })
+          : s;
+        wrapper.appendChild(buildPatternElUSS(patId, sForGroup, refGroup));
+      } else {
+        // Diagonal stripes: swap direction for mirror parts so sleeves go opposite ways
+        let sMirror = s;
+        if (part.mirrorPattern && i > 0) {
           const mirrorType = s.patType === 'dstripes45' ? 'dstripes135'
                            : s.patType === 'dstripes135' ? 'dstripes45'
                            : s.patType;
-          const sMirror = Object.assign({}, s, { patType: mirrorType, rot: -s.rot, ox: -s.ox });
-          wrapper.appendChild(buildPatternEl(patId, sMirror));
+          sMirror = Object.assign({}, s, { patType: mirrorType, rot: -s.rot, ox: -s.ox });
         }
-      } else {
-        if (part.mirrorPattern && isHVStripe) {
-          wrapper.appendChild(buildPatternElUSS(patId, s, g));
-        } else {
-          wrapper.appendChild(buildPatternEl(patId, s));
-        }
+        wrapper.appendChild(buildPatternEl(patId, sMirror));
       }
       g.querySelectorAll('path, ellipse, rect, circle, polygon, polyline').forEach(el => {
         if (part.strokeOnly) el.style.stroke = `url(#${patId})`;
@@ -1605,24 +1615,26 @@ function updateStripeControls() {
   // Spacing row: shown for all stripe types
   document.getElementById('stripe-spacing-row').style.display = 'flex';
   // Relabel sliders contextually
-  document.getElementById('stripe-thickness-label').textContent = isOBB ? 'Stripe %' : 'Thickness';
-  document.getElementById('stripe-spacing-label').textContent = isOBB ? 'Gap %' : 'Spacing';
-  // For OBB stripes, cap spacing slider to complement thickness (stripe+gap <= 95)
+  document.getElementById('stripe-thickness-label').textContent = isOBB ? 'Width' : 'Thickness';
+  document.getElementById('stripe-spacing-label').textContent = isOBB ? 'Gap' : 'Spacing';
+  // H/V stripes: independent absolute width & gap (1–200% of ref unit)
+  // Diagonal: raw SVG unit values
+  const thicknessInput = document.getElementById('stripe-thickness');
   const spacingInput = document.getElementById('stripe-spacing');
   if (isOBB) {
-    spacingInput.min = 5;
-    spacingInput.max = 95;
+    thicknessInput.min = 1; thicknessInput.max = 200;
+    spacingInput.min = 1;   spacingInput.max = 200;
   } else {
-    spacingInput.min = 2;
-    spacingInput.max = 300;
+    thicknessInput.min = 2; thicknessInput.max = 300;
+    spacingInput.min = 2;   spacingInput.max = 300;
   }
 
   document.getElementById('stripe-count').value = s.stripeCount;
   document.getElementById('stripe-thickness').value = s.stripeThickness;
   document.getElementById('stripe-spacing').value = s.stripeSpacing;
   document.getElementById('val-stripe-count').textContent = s.stripeCount;
-  document.getElementById('val-stripe-thickness').textContent = isOBB ? s.stripeThickness + '%' : s.stripeThickness;
-  document.getElementById('val-stripe-spacing').textContent = isOBB ? s.stripeSpacing + '%' : s.stripeSpacing;
+  document.getElementById('val-stripe-thickness').textContent = s.stripeThickness;
+  document.getElementById('val-stripe-spacing').textContent = s.stripeSpacing;
 }
 
 function onStripeSlider(prop, val) {
@@ -1631,8 +1643,7 @@ function onStripeSlider(prop, val) {
   state[selected][prop] = num;
   const isOBB = state[selected].patType === 'hstripes' || state[selected].patType === 'vstripes';
   const labelMap = { stripeCount: 'val-stripe-count', stripeThickness: 'val-stripe-thickness', stripeSpacing: 'val-stripe-spacing' };
-  const suffix = (isOBB && (prop === 'stripeThickness' || prop === 'stripeSpacing')) ? '%' : '';
-  document.getElementById(labelMap[prop]).textContent = num + suffix;
+  document.getElementById(labelMap[prop]).textContent = num;
   if (state[selected].mode === 'pattern') applyFill(selected);
 }
 
