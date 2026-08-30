@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jockey Designer</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Canvas ── */
+#canvas-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #16213e;
+  position: relative;
+  overflow: hidden;
+}
+#canvas-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(45deg, #1a1a2e 25%, transparent 25%),
+    linear-gradient(-45deg, #1a1a2e 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1a1a2e 75%),
+    linear-gradient(-45deg, transparent 75%, #1a1a2e 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-color: #202040;
+  opacity: 0.5;
+}
+#jockey-svg {
+  position: relative;
+  max-height: 90vh;
+  max-width: 100%;
+  filter: drop-shadow(0 8px 32px rgba(0,0,0,0.7));
+}
+#jockey-svg [data-part] { cursor: pointer; }
+#jockey-svg [data-part]:hover path,
+#jockey-svg [data-part]:hover ellipse { opacity: 0.85; }
+
+/* Non-scaling strokes so width is always in screen pixels regardless of transform */
+#jockey-svg [data-part] path,
+#jockey-svg [data-part] ellipse {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1.5px !important;
+}
+#jockey-svg #shadows path,
+#jockey-svg #shadows ellipse {
+  vector-effect: non-scaling-stroke;
+  stroke-width: 0.4px !important;
+}
+
+/* selection ring drawn via JS overlay rect */
+#sel-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ── Panel ── */
+#panel {
+  width: 300px;
+  min-width: 300px;
+  background: #0d1b2a;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #1a3a5c;
+  overflow: hidden;
+}
+#panel-header {
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #c0392b, #e74c3c);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* ── Tabs ── */
+#tabs {
+  display: flex;
+  border-bottom: 1px solid #1a3a5c;
+  flex-shrink: 0;
+}
+.tab {
+  flex: 1;
+  padding: 10px 8px;
+  text-align: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #5a7a9a;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.tab.active { color: #e74c3c; border-bottom-color: #e74c3c; }
+.tab:hover:not(.active) { color: #ccc; }
+
+/* ── Parts tab ── */
+#tab-parts { overflow-y: auto; flex: 1; padding: 8px; }
+.part-group-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #3a5a7a;
+  padding: 8px 6px 4px;
+}
+.part-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  background: none;
+  border: 1px solid transparent;
+  color: #9ab;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 4px;
+  margin-bottom: 1px;
+  transition: all 0.12s;
+}
+.part-btn:hover { background: #1a3a5c; color: #ddd; border-color: #2a4a6c; }
+.part-btn.active { background: #1a2a4a; color: #fff; border-color: #e74c3c; }
+.part-swatch {
+  width: 14px; height: 14px;
+  border-radius: 2px;
+  border: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+
+/* ── Edit tab ── */
+#tab-edit {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#no-selection {
+  color: #3a5a7a;
+  font-size: 13px;
+  text-align: center;
+  padding: 40px 20px;
+  line-height: 1.6;
+}
+#no-selection b { color: #5a8aaa; }
+
+#edit-controls { display: none; }
+
+.section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #3a6a9a;
+  margin-bottom: 6px;
+}
+.selected-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 2px;
+}
+
+/* Fill mode toggle */
+.mode-toggle {
+  display: flex;
+  background: #0a1520;
+  border-radius: 5px;
+  padding: 3px;
+  gap: 2px;
+}
+.mode-btn {
+  flex: 1;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  color: #5a7a9a;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.12s;
+}
+.mode-btn.active {
+  background: #e74c3c;
+  color: #fff;
+}
+
+/* Color input */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.color-row label { font-size: 12px; color: #7a9ab5; flex: 1; }
+input[type="color"] {
+  width: 48px;
+  height: 28px;
+  border: 1px solid #2a4a6c;
+  border-radius: 3px;
+  background: #0a1520;
+  cursor: pointer;
+  padding: 1px 2px;
+}
+
+/* Pattern grid */
+.pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+.pat-thumb {
+  aspect-ratio: 1;
+  border: 2px solid #1a3a5c;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow: hidden;
+  background: #0a1520;
+  transition: border-color 0.12s;
+  position: relative;
+}
+.pat-thumb:hover { border-color: #3a6a9a; }
+.pat-thumb.active { border-color: #e74c3c; }
+.pat-thumb svg { width: 100%; height: 100%; display: block; }
+.pat-thumb span {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  text-align: center;
+  font-size: 7px;
+  background: rgba(0,0,0,0.6);
+  color: #aaa;
+  padding: 1px;
+}
+
+/* Sliders */
+.slider-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.slider-header label { font-size: 12px; color: #7a9ab5; }
+.slider-header .val { font-size: 11px; color: #e74c3c; font-weight: 600; min-width: 36px; text-align: right; }
+input[type="range"] {
+  width: 100%;
+  height: 4px;
+  accent-color: #e74c3c;
+  cursor: pointer;
+}
+
+/* Two columns */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* Divider */
+.divider { border: none; border-top: 1px solid #1a3a5c; }
+
+/* Footer */
+#panel-footer {
+  padding: 12px;
+  border-top: 1px solid #1a3a5c;
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+}
+.action-btn {
+  flex: 1;
+  padding: 9px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: opacity 0.12s;
+}
+.action-btn:hover { opacity: 0.85; }
+.btn-primary { background: #e74c3c; color: white; }
+.btn-secondary { background: #1a3a5c; color: #9ab; }
+</style>
+</head>
+<body>
+
+<div id="canvas-area">
+  <div id="canvas-bg"></div>
+  <svg id="jockey-svg" viewBox="0 0 2550 3300" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <defs id="svg-defs"></defs>
+
+    <!-- Ring -->
+    <g id="part-ring" data-part="ring">
+      <ellipse cx="1637" cy="834.992" rx="14.85" ry="26.741"
+        transform="matrix(6.7722,-4.38198,3.56036,5.50241,-12081.6,3181.33)"
+        style="fill:none;stroke:#333;stroke-width:1.28px;"/>
+    </g>
+
+    <!-- Base platform -->
+    <g id="part-base" data-part="base">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1413.96,1145.81L1411.77,1147.74L1411.3,1168.11L1492.88,1224.46L1602.16,1192.1L1608.26,1171.82L1607.02,1169.15L1491.74,1195.06L1413.96,1145.81Z"
+        style="fill:#2a2a2a;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Floor -->
+    <g id="part-floor" data-part="floor">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1534.58,1113.76L1413.96,1139.79L1491.95,1189.06L1608.26,1162.8L1534.58,1113.76Z"
+        style="fill:rgb(0,147,0);stroke:black;stroke-width:0.32px;"/>
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1413.96,1139.79L1413.96,1145.81L1491.4,1195.06L1606.64,1169.14L1608.26,1162.57L1491.92,1189.06L1413.96,1139.79Z"
+        style="fill:rgb(0,100,0);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Right Boot -->
+    <g id="part-rboot" data-part="rboot">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1458.02,1051.26L1462.3,1102.31C1463.47,1110.76 1451.96,1130.24 1452.9,1137.17C1452.47,1145.25 1456.51,1147.1 1463.37,1145.02C1467.68,1145.49 1479.52,1127.29 1483.37,1125.75C1483.93,1119.99 1483.59,1114.05 1482.17,1107.9C1482.44,1079.88 1486.1,1082.67 1487.89,1053.4C1473.98,1055.79 1461.02,1054.19 1458.02,1051.26Z"
+        style="fill:#111;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Left Boot -->
+    <g id="part-lboot" data-part="lboot">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1511.65,1063.24C1522.55,1065.13 1533.31,1065.27 1543.9,1063.36C1544.81,1071.38 1545.4,1083.61 1545.68,1099.89C1546.77,1104.15 1547.21,1108.2 1547.35,1112.14C1556.52,1120.15 1564.15,1125.39 1566.02,1127.04C1573.03,1133.94 1574.6,1137 1577.1,1140.82C1579.03,1146.9 1577.46,1150.01 1573.05,1150.7C1564.21,1148.61 1555.44,1146.52 1549.49,1143.79C1544.71,1142.08 1538.27,1135.36 1531.88,1128.8C1528.29,1128.12 1525.36,1127.05 1523.07,1125.59C1520.75,1119.43 1520.68,1114.17 1521.53,1109.29C1518.67,1082.42 1513.59,1082.47 1511.65,1063.24Z"
+        style="fill:#111;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Right Boot Cuff -->
+    <g id="part-rbootcuff" data-part="rbootcuff">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1457.7,1018.48C1460.88,1029.89 1476.85,1031.32 1491.93,1020.17C1492.14,1033.51 1490.77,1044.06 1488.7,1053.34C1474.21,1055.56 1463.29,1054.8 1456.41,1050.68C1455.64,1039.82 1455.94,1029.08 1457.7,1018.48Z"
+        style="fill:rgb(130,68,0);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Left Boot Cuff -->
+    <g id="part-lbootcuff" data-part="lbootcuff">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1509.74,1031.26C1507.86,1041.76 1507.77,1052.39 1509.45,1063.15C1521.16,1065.37 1532.87,1065.43 1544.58,1063.34C1544.38,1049.64 1542.85,1041.96 1541.34,1036.52C1530.93,1041.55 1520.4,1039.68 1509.74,1031.26Z"
+        style="fill:rgb(130,68,0);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Pants -->
+    <g id="part-pants" data-part="pants">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1467.31,896.584C1454.75,907.385 1455.48,960.988 1457.7,1018.48C1460.71,1031.53 1479.88,1030.52 1491.93,1020.17C1493.89,1011.16 1494.71,994.137 1498.37,982.441C1504.83,1003.08 1505.77,1029.47 1510.03,1031.82C1519.86,1039.52 1530.24,1040.78 1541.08,1036.7C1542.63,1033.01 1543.71,1026.05 1542.39,1002.31C1541.05,978.036 1536.24,963.069 1537.5,942.579C1539.03,926.493 1537.77,913.207 1535.49,900.932C1523.33,915.427 1511.73,922.547 1500.39,926.277L1496.34,918.78L1491.34,927.134C1481.94,918.055 1473.88,907.909 1467.31,896.584Z"
+        style="fill:#ffffff;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Shirt -->
+    <g id="part-shirt" data-part="shirt">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1491.29,788.268C1495.31,792.298 1497.86,798.646 1499.92,805.766C1507.81,801.982 1515.15,796.926 1520.93,789.243L1525.36,796.066C1555.45,812.412 1547.91,804.576 1580.3,826.598C1587.06,826.523 1593.47,825.95 1599.72,822.829C1597.89,832.253 1599.07,838.147 1604.72,844.791C1595.35,850.285 1586.15,856.767 1579.13,858.342C1572.53,857.455 1562.18,849.715 1552.4,843.003C1548.02,867.686 1542.17,887.505 1534.74,902.034C1524.25,914.807 1512.59,921.541 1500.58,926.437L1496.39,919L1491.28,927.134C1482.43,918.041 1473.92,908.393 1467.11,895.992C1467.71,892.133 1469.65,888.609 1474.31,885.766C1469.75,872.513 1466,858.108 1465.25,839.517C1459.29,849.576 1453.32,858.155 1447.35,864.152C1451.41,873.009 1454.65,880.882 1457.94,885.677C1449.99,886.431 1443.11,889.014 1436.98,892.888L1422.95,867.871C1419.6,861.873 1418.78,855.193 1422.02,847.419C1428.8,832.348 1438.2,819.129 1451.07,808.374C1465.17,800.067 1481.09,802.828 1491.29,788.268Z"
+        style="fill:rgb(255,14,14);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Right Sleeve -->
+    <g id="part-rsleeve" data-part="rsleeve">
+      <path d="M731.339,555.845C728.25,631.544 746.925,705.264 786.913,777.047C754.161,836.999 716.253,891.794 671.264,939.507C697.704,998.449 721.569,1048.96 739.185,1079.02C688.694,1083.92 642.257,1099.51 600.589,1127.67C585.822,1074.12 491.042,962.464 491.042,885.354C481.685,827.823 623.521,590.505 731.339,555.845Z"
+        style="fill:rgb(255,14,14);stroke:black;stroke-width:2.085px;"/>
+    </g>
+
+    <!-- Left Sleeve -->
+    <g id="part-lsleeve" data-part="lsleeve">
+      <path d="M1349.53,574.231C1308.75,588.055 1301.61,776.468 1358.71,798.187C1412.6,841.328 1469.27,877.986 1532.18,900.068C1546.19,902.511 1603.65,871.838 1701.87,810.119C1667.11,772.347 1656.41,724.757 1670.78,666.934C1639.17,685.678 1595.02,693.023 1541.36,691.716C1475.33,644.734 1411.55,606.175 1349.53,574.231Z"
+        style="fill:rgb(255,14,14);stroke:black;stroke-width:2.085px;"/>
+    </g>
+
+    <!-- Collar -->
+    <g id="part-collar" data-part="collar">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1491.27,787.981C1489.01,790.444 1487.22,792.195 1486,793.878C1487.93,802.083 1490.39,808.142 1493.36,812.058C1494.71,809.407 1496.85,807.04 1500.02,805.039C1502.02,808.193 1503.78,811.016 1505.01,813.13C1512.04,809.453 1518.92,804.429 1525.43,796.071C1524.41,793.466 1522.85,791.284 1520.66,789.589C1514.41,797.628 1507.43,802.33 1500.02,805.039C1497.52,798.27 1494.67,792.41 1491.27,787.981Z"
+        style="fill:#111;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Left Cuff -->
+    <g id="part-lcuff" data-part="lcuff">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1614.11,818.403C1608.84,818.467 1604.13,820.526 1600.02,822.337C1597.47,829.939 1599.25,839.811 1605.32,845.012C1609.41,842.438 1613.06,839.352 1615.74,835.197C1613.58,828.65 1614.5,825.706 1614.11,818.403Z"
+        style="fill:#111;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Right Cuff -->
+    <g id="part-rcuff" data-part="rcuff">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1435.95,893.524C1443.12,889.11 1450.73,886.061 1459.2,885.677C1460.17,888.803 1460.56,891.974 1459.84,895.23L1443.61,903.662C1440.02,900.89 1437.33,897.595 1435.95,893.524Z"
+        style="fill:#111;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Right Hand -->
+    <g id="part-rhand" data-part="rhand">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1445.61,902.632C1444.77,905.094 1443.93,908.586 1444.92,911.048C1438.17,918.697 1439.21,922.81 1447.11,923.804C1451.1,923.905 1455.05,923.278 1458.63,914.761C1460.1,906.409 1459.57,900.028 1457.3,896.584L1445.61,902.632Z"
+        style="fill:rgb(255,233,206);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Left Hand -->
+    <g id="part-lhand" data-part="lhand">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1614.21,818.403C1616.52,812.882 1621.2,807.99 1623.81,807.355C1624.66,808.445 1624.62,808.933 1625.98,808.66C1627.4,808.017 1627.39,807.26 1627.67,805.889C1638.68,806.102 1640.17,806.532 1642.17,813.14C1642.64,815.44 1641.89,819.579 1641.97,821.744C1642.07,824.458 1642.92,826.762 1642.25,829.297C1640.05,833.153 1635.47,835.801 1630.83,836.027C1625.44,835.942 1624.67,834.526 1615.74,835.001C1613.67,830.788 1614.42,825.295 1614.21,818.403Z"
+        style="fill:rgb(255,233,206);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Hat Base Color -->
+    <g id="part-hatbase" data-part="hatbase">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1481.99,760.426C1482.51,749.649 1493.2,747.25 1493.48,747.224C1500.83,746.536 1521.03,747.341 1527.94,748.352C1531.61,748.13 1534.48,746.892 1535.81,743.68C1531.93,733.097 1507.43,739.537 1505.19,740.552L1498.03,742.527C1492.56,734.627 1496.8,723.518 1496.8,723.518C1483.31,727.224 1474.02,743.063 1481.99,760.426Z"
+        style="fill:rgb(255,42,42);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Hat Front Panel -->
+    <g id="part-fpanel" data-part="fpanel">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1496.8,723.518C1494.13,730.301 1494.47,737.464 1498.43,743.018C1508.15,738.12 1518.52,736.976 1528.17,738.084C1522.58,723.678 1514.12,720 1496.8,723.518Z"
+        style="fill:#ffffff;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Hat Back Panel -->
+    <g id="part-bpanel" data-part="bpanel">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1494.27,724.562C1486.7,731.516 1483.77,739.096 1487.32,749.589C1484.26,751.703 1482.46,755.269 1481.76,760.08C1475.26,747.503 1479.6,730.132 1494.27,724.562Z"
+        style="fill:#111;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Hat Bill -->
+    <g id="part-hatbill" data-part="hatbill">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1493.58,747.251C1499.41,738.064 1533.29,732.584 1535.81,743.522C1534.62,746.367 1531.99,747.976 1527.94,748.352C1509.58,747.845 1497.38,745.767 1493.58,747.251Z"
+        style="fill:#111;stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Hair -->
+    <g id="part-hair" data-part="hair">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1482.05,761.917C1483.21,765.87 1484.71,767.477 1486.4,767.743C1483.72,761.283 1483.81,756.626 1487.19,754.116C1492.71,753.083 1495.03,758.074 1496.08,765.472L1498.15,765.274L1497.26,756.486L1499.24,753.227L1498.94,747.203C1486.31,746.175 1482.56,752.669 1482.05,761.917Z"
+        style="fill:rgb(139,93,0);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Face -->
+    <g id="part-face" data-part="face">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1527.87,748.586L1527.58,755.597C1527.92,757.915 1528.03,759.867 1527.87,761.423C1526.19,770.982 1523.57,778.188 1520.37,783.938L1520.57,789.863C1515.56,796.664 1508.39,801.612 1499.83,805.367C1497.04,797.524 1494.18,791.203 1491.14,788.184L1491.04,775.248C1487.93,772.361 1485.94,768.98 1485.11,765.077C1484.25,760.253 1484.53,754.519 1487.98,753.326C1492.07,752.518 1496.05,761.002 1496.96,764.484L1496.17,747.401C1506.81,746.797 1517.38,746.974 1527.87,748.586Z"
+        style="fill:rgb(255,233,206);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Hat Button -->
+    <g id="part-hatbutton" data-part="hatbutton">
+      <path transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)"
+        d="M1492.64,725.114C1492.37,723.803 1492.33,722.447 1495.12,721.251C1498.71,720.483 1499.16,721.158 1500.02,722.999C1497.4,723.21 1494.93,723.892 1492.64,725.114Z"
+        style="fill:rgb(255,70,70);stroke:black;stroke-width:0.32px;"/>
+    </g>
+
+    <!-- Shadows / detail lines — always on top, non-interactive -->
+    <g id="shadows" style="pointer-events:none;fill:none;stroke:black;">
+      <g transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)">
+        <path d="M1501.96,756.104L1505.8,753.764L1512.34,753.764L1512.34,751.518L1505.3,751.893L1501.96,756.104Z" style="stroke-width:0.06px;"/>
+        <path d="M1522.02,751.643L1521.93,753.811L1525.86,753.983L1526.76,754.794L1525.95,752.173L1522.02,751.643Z" style="stroke-width:0.06px;"/>
+        <path d="M1521.68,759.161C1523.24,763.264 1521.27,768.579 1517.93,768.69C1519.9,769.051 1521.75,768.97 1522.47,767.747C1523.46,765.46 1522.97,760.964 1521.68,759.161Z" style="stroke-width:0.06px;"/>
+        <ellipse cx="1509.59" cy="756.759" rx="1.516" ry="1.31" style="stroke-width:0.06px;"/>
+        <ellipse cx="1524.64" cy="756.837" rx="1.185" ry="1.232" style="stroke-width:0.06px;"/>
+        <path d="M1512.76,773.86C1515,774.505 1517.39,774.882 1520.46,774.172C1521.18,773.327 1521.37,772.483 1521.26,771.638C1518.92,772.685 1515.94,773.333 1512.76,773.86Z" style="stroke-width:0.06px;"/>
+        <path d="M1491.41,817.523C1487.26,844.336 1487.94,874.302 1492.9,907.064C1489.53,877.217 1488.84,847.37 1491.41,817.523Z" style="stroke-width:0.06px;"/>
+        <path d="M1471.04,929.524C1478.55,936.55 1486.06,944.502 1493.58,956.297C1503.63,950.432 1511.76,943.123 1518.63,934.878C1509.63,943.207 1500.99,950.007 1493.58,951.983C1487.67,943.123 1479.73,936.003 1471.04,929.524Z" style="stroke-width:0.06px;"/>
+        <path d="M1474.76,893.082C1483.86,900.772 1494.21,905.324 1505.69,907.064C1494.35,903.23 1484.12,898.503 1474.76,893.082Z" style="stroke-width:0.06px;"/>
+        <path d="M1556.78,829.796C1548.72,839.42 1538.52,846.268 1527.01,851.424C1537.12,844.676 1547.08,837.559 1556.78,829.796Z" style="stroke-width:0.06px;"/>
+        <path d="M1531.91,810.23C1523.32,817.777 1513.06,821.569 1501.22,821.805C1511.74,819.867 1522,816.229 1531.91,810.23Z" style="stroke-width:0.06px;"/>
+        <path d="M1474.93,813.706C1478.53,823.818 1485.81,830.134 1496.59,832.864C1487.04,828.807 1479.8,822.442 1474.93,813.706Z" style="stroke-width:0.06px;"/>
+        <path d="M1424.94,852.266C1434.96,853.735 1443.02,852.6 1448.78,848.382C1441.28,851.343 1433.25,852.352 1424.94,852.266Z" style="stroke-width:0.06px;"/>
+        <path d="M1431.87,841.681C1438.83,843.35 1444.51,842.88 1448.02,838.863C1443.69,841.454 1438.02,841.935 1431.87,841.681Z" style="stroke-width:0.06px;"/>
+        <path d="M1533.24,937.514C1527.03,967.35 1537.95,980.781 1537.5,1031.69C1538.79,981.766 1529.45,967.239 1533.24,937.514Z" style="stroke-width:0.06px;"/>
+        <path d="M1499.26,953.048C1501.07,962.935 1501.2,972.101 1500.73,981.012C1500.53,971.241 1499.85,961.945 1497.86,953.962C1497.48,971.842 1494.6,982.936 1491.28,992.832C1494.17,981.465 1495.69,958.293 1493.03,955.298L1499.26,953.048Z" style="stroke-width:0.06px;"/>
+        <path d="M1494.14,776.117C1505.66,781.598 1512.35,785.177 1517.96,784.403C1512.95,786.698 1505.75,781.568 1494.14,776.117Z" style="stroke-width:0.06px;"/>
+      </g>
+      <g transform="matrix(5.81041,0,0,5.40217,-7710.22,-3852.13)">
+        <path d="M1494.5,765.185L1492.8,765.611C1489.72,759.164 1487.47,757.152 1486.34,761.103C1487.15,756.807 1488.97,755.49 1494.5,765.185Z" style="stroke-width:0.07px;"/>
+      </g>
+      <g transform="matrix(8.2954,-1.28188,1.12027,7.24959,-12369.6,-3529.57)">
+        <path d="M1474.76,893.082C1483.86,900.772 1494.21,905.324 1505.69,907.064C1494.35,903.23 1484.12,898.503 1474.76,893.082Z" style="stroke-width:0.05px;"/>
+      </g>
+      <g transform="matrix(10.1484,-3.21831,2.69531,8.4992,-16539.3,-1899.56)">
+        <path d="M1474.76,893.082C1478.11,898.826 1487.17,906.099 1502.38,903.975C1491.04,900.141 1480.28,899.12 1474.76,893.082Z" style="stroke-width:0.04px;"/>
+      </g>
+    </g>
+
+    <!-- Logo overlay — draggable, above everything except the selection highlight -->
+    <g id="logo-layer" style="display:none;">
+      <g id="logo-drag" transform="translate(980,820) rotate(0) scale(0.18)"
+         style="cursor:move;" >
+        <!-- saratogaLogo path with combined transform:
+             matrix(12.9698) × translate(-45.5047,15.3387) × translate(-899.236,-939.551)
+             = matrix(12.9698,0,0,12.9698,-1489.255,-740.605) -->
+        <g transform="matrix(12.9698,0,0,12.9698,-1489.255,-740.605)">
+          <path id="logo-path"
+            d="M140.145,57.103L114.838,83.093L114.838,86.059C114.838,89.519 120.752,89.519 120.752,86.059L120.752,83.283L138.205,60.62L126.094,83.188L126.094,86.059C126.094,89.424 132.102,89.253 132.102,86.059L132.102,83.188L139.498,60.449L136.721,83.188L136.721,86.059C136.721,89.747 143.282,89.747 143.282,86.059L143.282,83.169L140.6,60.62L147.996,83.188L147.996,86.059C147.996,89.443 153.623,89.652 153.623,86.059L153.623,83.188L141.988,60.62L158.699,83.188L158.699,86.059C158.699,89.652 164.252,89.652 164.252,86.059L164.252,83.169L140.145,57.103Z"
+            style="fill:#ffffff;stroke:none;"/>
+        </g>
+        <!-- Hit-area rect so empty space inside logo is also draggable -->
+        <rect id="logo-hitbox" x="0" y="0" width="641" height="412" fill="transparent"/>
+      </g>
+    </g>
+
+    <!-- Selection highlight — drawn last so always visible -->
+    <g id="selection-highlight" style="pointer-events:none;display:none;">
+      <use id="sel-use" href="" style="fill:none;stroke:#00d4ff;stroke-width:12px;opacity:0.9;"/>
+    </g>
+  </svg>
+</div>
+
+<!-- ── Side Panel ── -->
+<div id="panel">
+  <div id="panel-header">Jockey Designer</div>
+
+  <div id="tabs">
+    <div class="tab active" id="tab-btn-parts" onclick="switchTab('parts')">Parts</div>
+    <div class="tab" id="tab-btn-edit" onclick="switchTab('edit')">Edit</div>
+    <div class="tab" id="tab-btn-logo" onclick="switchTab('logo')">Logo</div>
+  </div>
+
+  <!-- Parts list -->
+  <div id="tab-parts">
+    <div class="part-group-label">Hat</div>
+    <button class="part-btn" id="listbtn-hatbutton" onclick="selectPart('hatbutton')"><span class="part-swatch" id="sw-hatbutton"></span>Hat Button</button>
+    <button class="part-btn" id="listbtn-hatbase" onclick="selectPart('hatbase')"><span class="part-swatch" id="sw-hatbase"></span>Hat Base</button>
+    <button class="part-btn" id="listbtn-fpanel" onclick="selectPart('fpanel')"><span class="part-swatch" id="sw-fpanel"></span>Front Panel</button>
+    <button class="part-btn" id="listbtn-bpanel" onclick="selectPart('bpanel')"><span class="part-swatch" id="sw-bpanel"></span>Back Panel</button>
+    <button class="part-btn" id="listbtn-hatbill" onclick="selectPart('hatbill')"><span class="part-swatch" id="sw-hatbill"></span>Hat Bill</button>
+
+    <div class="part-group-label">Head</div>
+    <button class="part-btn" id="listbtn-hair" onclick="selectPart('hair')"><span class="part-swatch" id="sw-hair"></span>Hair</button>
+    <button class="part-btn" id="listbtn-face" onclick="selectPart('face')"><span class="part-swatch" id="sw-face"></span>Face</button>
+
+    <div class="part-group-label">Upper Body</div>
+    <button class="part-btn" id="listbtn-collar" onclick="selectPart('collar')"><span class="part-swatch" id="sw-collar"></span>Collar</button>
+    <button class="part-btn" id="listbtn-shirt" onclick="selectPart('shirt')"><span class="part-swatch" id="sw-shirt"></span>Shirt</button>
+    <button class="part-btn" id="listbtn-sleeves" onclick="selectPart('sleeves')"><span class="part-swatch" id="sw-sleeves"></span>Sleeves</button>
+    <button class="part-btn" id="listbtn-shirtcuffs" onclick="selectPart('shirtcuffs')"><span class="part-swatch" id="sw-shirtcuffs"></span>Shirt Cuffs</button>
+    <button class="part-btn" id="listbtn-lhand" onclick="selectPart('lhand')"><span class="part-swatch" id="sw-lhand"></span>Left Hand</button>
+    <button class="part-btn" id="listbtn-rhand" onclick="selectPart('rhand')"><span class="part-swatch" id="sw-rhand"></span>Right Hand</button>
+
+    <div class="part-group-label">Lower Body</div>
+    <button class="part-btn" id="listbtn-pants" onclick="selectPart('pants')"><span class="part-swatch" id="sw-pants"></span>Pants</button>
+    <button class="part-btn" id="listbtn-bootcuffs" onclick="selectPart('bootcuffs')"><span class="part-swatch" id="sw-bootcuffs"></span>Boot Cuffs</button>
+    <button class="part-btn" id="listbtn-boots" onclick="selectPart('boots')"><span class="part-swatch" id="sw-boots"></span>Boots</button>
+
+    <div class="part-group-label">Environment</div>
+    <button class="part-btn" id="listbtn-floor" onclick="selectPart('floor')"><span class="part-swatch" id="sw-floor"></span>Floor</button>
+    <button class="part-btn" id="listbtn-base" onclick="selectPart('base')"><span class="part-swatch" id="sw-base"></span>Base</button>
+    <button class="part-btn" id="listbtn-ring" onclick="selectPart('ring')"><span class="part-swatch" id="sw-ring"></span>Ring</button>
+  </div>
+
+  <!-- Edit panel -->
+  <div id="tab-edit" style="display:none;">
+    <div id="no-selection">
+      Click a part on the figure<br>or select from the <b>Parts</b> list
+    </div>
+
+    <div id="edit-controls">
+      <div class="selected-name" id="edit-title"></div>
+      <div class="section-label">Fill Type</div>
+
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="mode-solid" onclick="setMode('solid')">Solid</button>
+        <button class="mode-btn" id="mode-pattern" onclick="setMode('pattern')">Pattern</button>
+      </div>
+
+      <!-- Solid controls -->
+      <div id="solid-section">
+        <div class="section-label" style="margin-top:4px;">Color</div>
+        <div class="color-row">
+          <input type="color" id="solid-color" oninput="onSolidColorChange(this.value)">
+        </div>
+      </div>
+
+      <!-- Pattern controls -->
+      <div id="pattern-section" style="display:none;">
+        <div class="section-label">Pattern</div>
+        <div class="pattern-grid" id="pattern-grid"></div>
+
+        <hr class="divider">
+
+        <div class="section-label">Colors</div>
+        <div class="two-col">
+          <div>
+            <div class="color-row">
+              <label>Base</label>
+              <input type="color" id="pat-c1" value="#ffffff" oninput="onPatternChange()">
+            </div>
+          </div>
+          <div>
+            <div class="color-row">
+              <label>Pattern</label>
+              <input type="color" id="pat-c2" value="#cc0000" oninput="onPatternChange()">
+            </div>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="section-label">Transform</div>
+
+        <div class="slider-row">
+          <div class="slider-header">
+            <label>Size</label>
+            <span class="val" id="val-size">20</span>
+          </div>
+          <input type="range" id="pat-size" min="4" max="80" value="20" oninput="onSlider('size',this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-header">
+            <label>Rotation</label>
+            <span class="val" id="val-rot">0°</span>
+          </div>
+          <input type="range" id="pat-rot" min="0" max="359" value="0" oninput="onSlider('rot',this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-header">
+            <label>Offset X</label>
+            <span class="val" id="val-ox">0</span>
+          </div>
+          <input type="range" id="pat-ox" min="-100" max="100" value="0" oninput="onSlider('ox',this.value)">
+        </div>
+
+        <div class="slider-row">
+          <div class="slider-header">
+            <label>Offset Y</label>
+            <span class="val" id="val-oy">0</span>
+          </div>
+          <input type="range" id="pat-oy" min="-100" max="100" value="0" oninput="onSlider('oy',this.value)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logo tab -->
+  <div id="tab-logo" style="display:none; flex:1; overflow-y:auto; padding:12px; flex-direction:column; gap:12px;">
+    <div class="section-label">Visibility</div>
+    <div class="mode-toggle">
+      <button class="mode-btn" id="logo-show-btn" onclick="toggleLogo(true)">Show</button>
+      <button class="mode-btn active" id="logo-hide-btn" onclick="toggleLogo(false)">Hide</button>
+    </div>
+
+    <hr class="divider">
+    <div class="section-label">Fill Color</div>
+    <div class="color-row">
+      <label>Logo Color</label>
+      <input type="color" id="logo-color" value="#ffffff" oninput="onLogoColor(this.value)">
+    </div>
+
+    <hr class="divider">
+    <div class="section-label">Transform</div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <label>Scale</label>
+        <span class="val" id="val-logo-scale">18%</span>
+      </div>
+      <input type="range" id="logo-scale" min="2" max="100" value="18" oninput="onLogoSlider()">
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <label>Rotation</label>
+        <span class="val" id="val-logo-rot">0°</span>
+      </div>
+      <input type="range" id="logo-rot" min="-180" max="180" value="0" oninput="onLogoSlider()">
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <label>Position X</label>
+        <span class="val" id="val-logo-x">980</span>
+      </div>
+      <input type="range" id="logo-x" min="0" max="2550" value="980" oninput="onLogoSlider()">
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <label>Position Y</label>
+        <span class="val" id="val-logo-y">820</span>
+      </div>
+      <input type="range" id="logo-y" min="0" max="3300" value="820" oninput="onLogoSlider()">
+    </div>
+
+    <hr class="divider">
+    <div style="font-size:11px;color:#3a6a9a;line-height:1.5;">
+      Drag the logo directly on the figure to reposition it.
+    </div>
+  </div>
+
+  <div id="panel-footer">
+    <button class="action-btn btn-secondary" onclick="resetAll()">Reset</button>
+    <button class="action-btn btn-primary" onclick="exportSVG()">Export SVG</button>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// Part definitions — id → { label, defaultFill }
+// ─────────────────────────────────────────────
+const PARTS = {
+  ring:       { label: 'Ring',           defaultFill: '#333333' },
+  base:       { label: 'Base',           defaultFill: '#2a2a2a' },
+  floor:      { label: 'Floor',          defaultFill: '#009300' },
+  boots:      { label: 'Boots',          defaultFill: '#111111', targets: ['part-rboot', 'part-lboot'] },
+  bootcuffs:  { label: 'Boot Cuffs',     defaultFill: '#824400', targets: ['part-rbootcuff', 'part-lbootcuff'] },
+  pants:      { label: 'Pants',          defaultFill: '#ffffff' },
+  sleeves:    { label: 'Sleeves',        defaultFill: '#ff0e0e', targets: ['part-rsleeve', 'part-lsleeve'] },
+  shirt:      { label: 'Shirt',          defaultFill: '#ff0e0e' },
+  collar:     { label: 'Collar',         defaultFill: '#111111' },
+  shirtcuffs: { label: 'Shirt Cuffs',   defaultFill: '#111111', targets: ['part-lcuff', 'part-rcuff'] },
+  rhand:      { label: 'Right Hand',     defaultFill: '#ffe9ce' },
+  lhand:      { label: 'Left Hand',      defaultFill: '#ffe9ce' },
+  hatbase:    { label: 'Hat Base',       defaultFill: '#ff2a2a' },
+  fpanel:     { label: 'Hat Front Panel',defaultFill: '#ffffff' },
+  bpanel:     { label: 'Hat Back Panel', defaultFill: '#111111' },
+  hatbill:    { label: 'Hat Bill',       defaultFill: '#111111' },
+  hair:       { label: 'Hair',           defaultFill: '#8b5d00' },
+  face:       { label: 'Face',           defaultFill: '#ffe9ce' },
+  hatbutton:  { label: 'Hat Button',     defaultFill: '#ff4646' },
+};
+
+// Reverse map: SVG element data-part value → PARTS key
+const elementToPart = {};
+Object.keys(PARTS).forEach(id => {
+  const targets = PARTS[id].targets || ['part-' + id];
+  targets.forEach(t => { elementToPart[t.replace('part-', '')] = id; });
+});
+
+// Per-part state
+const state = {};
+Object.keys(PARTS).forEach(id => {
+  state[id] = {
+    mode: 'solid',
+    solidColor: PARTS[id].defaultFill,
+    patType: 'hstripes',
+    c1: '#ffffff',
+    c2: '#cc0000',
+    size: 20,
+    rot: 0,
+    ox: 0,
+    oy: 0,
+  };
+});
+
+let selected = null;
+let activeTab = 'parts';
+
+// ─────────────────────────────────────────────
+// Pattern definitions
+// Each function returns an object: { width, height, html }
+// Coordinates are in the pre-transform SVG space (~0-200 range units)
+// ─────────────────────────────────────────────
+const PATTERNS = [
+  { id: 'hstripes',    label: 'H. Stripes',   icon: iconHStripes },
+  { id: 'vstripes',    label: 'V. Stripes',   icon: iconVStripes },
+  { id: 'dstripes45',  label: 'Diag 45',      icon: iconDStripes45 },
+  { id: 'dstripes135', label: 'Diag 135',     icon: iconDStripes135 },
+  { id: 'grid',        label: 'Grid',         icon: iconGrid },
+  { id: 'squares',     label: 'Squares',      icon: iconSquares },
+  { id: 'diamonds',    label: 'Diamonds',     icon: iconDiamonds },
+  { id: 'dots',        label: 'Dots',         icon: iconDots },
+  { id: 'herringbone', label: 'Herringbone',  icon: iconHerringbone },
+  { id: 'argyle',      label: 'Argyle',       icon: iconArgyle },
+];
+
+function makePatternSVG(id, s) {
+  const sz = s.size;
+  const c1 = s.c1;
+  const c2 = s.c2;
+  const ox = s.ox;
+  const oy = s.oy;
+  const rot = s.rot;
+
+  let w, h, inner;
+
+  switch (s.patType) {
+    case 'hstripes':
+      w = sz; h = sz;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <rect width="${w}" height="${h/2}" fill="${c2}"/>`;
+      break;
+    case 'vstripes':
+      w = sz; h = sz;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <rect width="${w/2}" height="${h}" fill="${c2}"/>`;
+      break;
+    case 'dstripes45': {
+      w = sz; h = sz;
+      const sw = sz / 2;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <line x1="${-w}" y1="${h}" x2="${w}" y2="${-h}" stroke="${c2}" stroke-width="${sw}"/>
+               <line x1="0" y1="${h}" x2="${w*2}" y2="${-h}" stroke="${c2}" stroke-width="${sw}"/>
+               <line x1="${-w*2}" y1="${h}" x2="0" y2="${-h}" stroke="${c2}" stroke-width="${sw}"/>`;
+      break;
+    }
+    case 'dstripes135': {
+      w = sz; h = sz;
+      const sw2 = sz / 2;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <line x1="0" y1="0" x2="${w*2}" y2="${h*2}" stroke="${c2}" stroke-width="${sw2}"/>
+               <line x1="${-w}" y1="0" x2="${w}" y2="${h*2}" stroke="${c2}" stroke-width="${sw2}"/>
+               <line x1="${w}" y1="0" x2="${w*3}" y2="${h*2}" stroke="${c2}" stroke-width="${sw2}"/>`;
+      break;
+    }
+    case 'grid': {
+      w = sz; h = sz;
+      const lw = Math.max(sz * 0.08, 0.5);
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <rect width="${lw}" height="${h}" fill="${c2}"/>
+               <rect width="${w}" height="${lw}" fill="${c2}"/>`;
+      break;
+    }
+    case 'squares': {
+      w = sz * 2; h = sz * 2;
+      const m = sz * 0.15;
+      const bs = sz - m * 2;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <rect x="${m}" y="${m}" width="${bs}" height="${bs}" fill="${c2}"/>
+               <rect x="${sz+m}" y="${m}" width="${bs}" height="${bs}" fill="${c2}"/>
+               <rect x="${m}" y="${sz+m}" width="${bs}" height="${bs}" fill="${c2}"/>
+               <rect x="${sz+m}" y="${sz+m}" width="${bs}" height="${bs}" fill="${c2}"/>`;
+      break;
+    }
+    case 'diamonds': {
+      w = sz * 2; h = sz * 2;
+      const hx = sz;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <polygon points="${hx},0 ${w},${hx} ${hx},${h} 0,${hx}" fill="${c2}"/>`;
+      break;
+    }
+    case 'dots': {
+      w = sz; h = sz;
+      const r = sz * 0.35;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="${c2}"/>`;
+      break;
+    }
+    case 'herringbone': {
+      w = sz * 2; h = sz * 2;
+      const sw3 = sz * 0.35;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <polyline points="0,${sz} ${sz},0 ${w},${sz}" stroke="${c2}" stroke-width="${sw3}" fill="none" stroke-linejoin="miter"/>
+               <polyline points="0,${h} ${sz},${sz} ${w},${h}" stroke="${c2}" stroke-width="${sw3}" fill="none" stroke-linejoin="miter"/>
+               <polyline points="${-sz},${sz} 0,0 ${sz},${sz}" stroke="${c2}" stroke-width="${sw3}" fill="none" stroke-linejoin="miter"/>
+               <polyline points="${-sz},${h} 0,${sz} ${sz},${h}" stroke="${c2}" stroke-width="${sw3}" fill="none" stroke-linejoin="miter"/>`;
+      break;
+    }
+    case 'argyle': {
+      w = sz * 2; h = sz * 2;
+      const lwa = sz * 0.04;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
+               <polygon points="${sz},0 ${w},${sz} ${sz},${h} 0,${sz}" fill="${c2}"/>
+               <line x1="${sz}" y1="0" x2="${sz}" y2="${h}" stroke="${c1}" stroke-width="${lwa}"/>
+               <line x1="0" y1="${sz}" x2="${w}" y2="${sz}" stroke="${c1}" stroke-width="${lwa}"/>`;
+      break;
+    }
+    default:
+      w = sz; h = sz;
+      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>`;
+  }
+
+  return { w, h, inner };
+}
+
+function buildPatternEl(patId, s) {
+  const { w, h, inner } = makePatternSVG(patId, s);
+  const ns = 'http://www.w3.org/2000/svg';
+  const pat = document.createElementNS(ns, 'pattern');
+  pat.setAttribute('id', patId);
+  pat.setAttribute('patternUnits', 'userSpaceOnUse');
+  pat.setAttribute('width', w);
+  pat.setAttribute('height', h);
+  pat.setAttribute('patternTransform', `translate(${s.ox},${s.oy}) rotate(${s.rot})`);
+  pat.innerHTML = inner;
+  return pat;
+}
+
+// ─────────────────────────────────────────────
+// Icon SVGs for pattern picker (20x20)
+// ─────────────────────────────────────────────
+function iconHStripes() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/><rect width="20" height="10" fill="#555"/></svg>`;
+}
+function iconVStripes() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/><rect width="10" height="20" fill="#555"/></svg>`;
+}
+function iconDStripes45() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
+    <line x1="-5" y1="20" x2="20" y2="-5" stroke="#555" stroke-width="8"/>
+    <line x1="5" y1="25" x2="30" y2="-5" stroke="#555" stroke-width="8"/></svg>`;
+}
+function iconDStripes135() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
+    <line x1="0" y1="-5" x2="25" y2="20" stroke="#555" stroke-width="8"/>
+    <line x1="-10" y1="-5" x2="15" y2="20" stroke="#555" stroke-width="8"/></svg>`;
+}
+function iconGrid() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
+    <rect x="0" y="0" width="1" height="20" fill="#555"/>
+    <rect x="10" y="0" width="1" height="20" fill="#555"/>
+    <rect x="0" y="0" width="20" height="1" fill="#555"/>
+    <rect x="0" y="10" width="20" height="1" fill="#555"/></svg>`;
+}
+function iconSquares() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
+    <rect x="2" y="2" width="6" height="6" fill="#555"/>
+    <rect x="12" y="2" width="6" height="6" fill="#555"/>
+    <rect x="2" y="12" width="6" height="6" fill="#555"/>
+    <rect x="12" y="12" width="6" height="6" fill="#555"/></svg>`;
+}
+function iconDiamonds() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
+    <polygon points="10,0 20,10 10,20 0,10" fill="#555"/></svg>`;
+}
+function iconDots() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
+    <circle cx="10" cy="10" r="5" fill="#555"/></svg>`;
+}
+function iconHerringbone() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
+    <polyline points="0,10 10,0 20,10" stroke="#555" stroke-width="5" fill="none" stroke-linejoin="miter"/>
+    <polyline points="0,20 10,10 20,20" stroke="#555" stroke-width="5" fill="none" stroke-linejoin="miter"/></svg>`;
+}
+function iconArgyle() {
+  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
+    <polygon points="10,0 20,10 10,20 0,10" fill="#555"/>
+    <line x1="10" y1="0" x2="10" y2="20" stroke="white" stroke-width="0.8"/>
+    <line x1="0" y1="10" x2="20" y2="10" stroke="white" stroke-width="0.8"/></svg>`;
+}
+
+// ─────────────────────────────────────────────
+// Swatch updater
+// ─────────────────────────────────────────────
+function updateSwatch(id) {
+  const sw = document.getElementById('sw-' + id);
+  if (!sw) return;
+  const s = state[id];
+  if (s.mode === 'solid') {
+    sw.style.background = s.solidColor;
+  } else {
+    // Show a gradient/stripe preview
+    sw.style.background = `linear-gradient(45deg, ${s.c1} 50%, ${s.c2} 50%)`;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Apply fill to SVG element
+// ─────────────────────────────────────────────
+function getTargetGroups(id) {
+  const targets = PARTS[id].targets || ['part-' + id];
+  return targets.map(t => document.getElementById(t)).filter(Boolean);
+}
+
+function applyFill(id) {
+  const groups = getTargetGroups(id);
+  if (!groups.length) return;
+  const s = state[id];
+  const shapes = groups.flatMap(g => [...g.querySelectorAll('path, ellipse, rect, circle, polygon, polyline')]);
+
+  if (s.mode === 'solid') {
+    removePatternDef(id);
+    shapes.forEach(el => el.style.fill = s.solidColor);
+  } else {
+    const patId = 'pat-' + id;
+    removePatternDef(id);
+
+    const patEl = buildPatternEl(patId, s);
+    const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    wrapper.id = 'patdef-' + id;
+    wrapper.appendChild(patEl);
+    document.getElementById('svg-defs').appendChild(wrapper);
+
+    shapes.forEach(el => el.style.fill = `url(#${patId})`);
+  }
+
+  updateSwatch(id);
+}
+
+function removePatternDef(id) {
+  const old = document.getElementById('patdef-' + id);
+  if (old) old.remove();
+}
+
+// ─────────────────────────────────────────────
+// Selection
+// ─────────────────────────────────────────────
+function selectPart(id) {
+  // Deselect old
+  if (selected) {
+    document.getElementById('listbtn-' + selected)?.classList.remove('active');
+  }
+  selected = id;
+  document.getElementById('listbtn-' + id)?.classList.add('active');
+
+  // Switch to edit tab
+  switchTab('edit');
+
+  // Populate edit panel
+  document.getElementById('no-selection').style.display = 'none';
+  document.getElementById('edit-controls').style.display = 'block';
+  document.getElementById('edit-title').textContent = PARTS[id].label;
+
+  const s = state[id];
+  // Mode buttons
+  document.getElementById('mode-solid').classList.toggle('active', s.mode === 'solid');
+  document.getElementById('mode-pattern').classList.toggle('active', s.mode === 'pattern');
+  document.getElementById('solid-section').style.display = s.mode === 'solid' ? 'block' : 'none';
+  document.getElementById('pattern-section').style.display = s.mode === 'pattern' ? 'block' : 'none';
+
+  // Solid color
+  document.getElementById('solid-color').value = toHex(s.solidColor);
+
+  // Pattern
+  document.getElementById('pat-c1').value = s.c1;
+  document.getElementById('pat-c2').value = s.c2;
+  document.getElementById('pat-size').value = s.size;
+  document.getElementById('pat-rot').value = s.rot;
+  document.getElementById('pat-ox').value = s.ox;
+  document.getElementById('pat-oy').value = s.oy;
+  document.getElementById('val-size').textContent = s.size;
+  document.getElementById('val-rot').textContent = s.rot + '°';
+  document.getElementById('val-ox').textContent = s.ox;
+  document.getElementById('val-oy').textContent = s.oy;
+
+  // Highlight active pattern thumb
+  document.querySelectorAll('.pat-thumb').forEach(b => {
+    b.classList.toggle('active', b.dataset.pat === s.patType);
+  });
+
+  // Update selection highlight
+  updateSelectionHighlight(id);
+}
+
+function updateSelectionHighlight(id) {
+  const hl = document.getElementById('selection-highlight');
+  const u = document.getElementById('sel-use');
+  if (!id) {
+    hl.style.display = 'none';
+    return;
+  }
+  // Clone the shape paths from the part and draw them with a highlight stroke
+  hl.style.display = 'block';
+  // Remove old highlight children (except the use element)
+  while (hl.firstChild) hl.removeChild(hl.firstChild);
+
+  const groups = getTargetGroups(id);
+  if (!groups.length) return;
+  groups.forEach(srcG => srcG.querySelectorAll('path, ellipse').forEach(origEl => {
+    const clone = origEl.cloneNode(false);
+    clone.style.fill = 'none';
+    clone.style.stroke = '#00d4ff';
+    clone.style.strokeWidth = '3px';
+    clone.style.vectorEffect = 'non-scaling-stroke';
+    clone.style.opacity = '0.9';
+    hl.appendChild(clone);
+  }));
+}
+
+// ─────────────────────────────────────────────
+// UI event handlers
+// ─────────────────────────────────────────────
+function setMode(mode) {
+  if (!selected) return;
+  state[selected].mode = mode;
+  document.getElementById('mode-solid').classList.toggle('active', mode === 'solid');
+  document.getElementById('mode-pattern').classList.toggle('active', mode === 'pattern');
+  document.getElementById('solid-section').style.display = mode === 'solid' ? 'block' : 'none';
+  document.getElementById('pattern-section').style.display = mode === 'pattern' ? 'block' : 'none';
+  applyFill(selected);
+}
+
+function onSolidColorChange(val) {
+  if (!selected) return;
+  state[selected].solidColor = val;
+  applyFill(selected);
+}
+
+function onPatternChange() {
+  if (!selected) return;
+  const s = state[selected];
+  s.c1 = document.getElementById('pat-c1').value;
+  s.c2 = document.getElementById('pat-c2').value;
+  applyFill(selected);
+}
+
+function onSlider(prop, val) {
+  if (!selected) return;
+  const num = parseFloat(val);
+  if (prop === 'size') {
+    state[selected].size = num;
+    document.getElementById('val-size').textContent = num;
+  } else if (prop === 'rot') {
+    state[selected].rot = num;
+    document.getElementById('val-rot').textContent = num + '°';
+  } else if (prop === 'ox') {
+    state[selected].ox = num;
+    document.getElementById('val-ox').textContent = num;
+  } else if (prop === 'oy') {
+    state[selected].oy = num;
+    document.getElementById('val-oy').textContent = num;
+  }
+  if (state[selected].mode === 'pattern') applyFill(selected);
+}
+
+// ─────────────────────────────────────────────
+// Tab switching
+// ─────────────────────────────────────────────
+function switchTab(name) {
+  activeTab = name;
+  document.getElementById('tab-parts').style.display = name === 'parts' ? 'flex' : 'none';
+  document.getElementById('tab-parts').style.flexDirection = 'column';
+  document.getElementById('tab-edit').style.display = name === 'edit' ? 'flex' : 'none';
+  document.getElementById('tab-edit').style.flexDirection = 'column';
+  document.getElementById('tab-btn-parts').classList.toggle('active', name === 'parts');
+  document.getElementById('tab-btn-edit').classList.toggle('active', name === 'edit');
+
+  if (name === 'parts') {
+    document.getElementById('tab-parts').style.display = '';
+    document.getElementById('tab-edit').style.display = 'none';
+  } else {
+    document.getElementById('tab-parts').style.display = 'none';
+    document.getElementById('tab-edit').style.display = '';
+  }
+}
+
+// ─────────────────────────────────────────────
+// Reset
+// ─────────────────────────────────────────────
+function resetAll() {
+  Object.keys(PARTS).forEach(id => {
+    state[id] = {
+      mode: 'solid',
+      solidColor: PARTS[id].defaultFill,
+      patType: 'hstripes',
+      c1: '#ffffff',
+      c2: '#cc0000',
+      size: 20,
+      rot: 0,
+      ox: 0,
+      oy: 0,
+    };
+    removePatternDef(id);
+    const g = document.getElementById('part-' + id);
+    if (g) {
+      g.querySelectorAll('path, ellipse').forEach(el => {
+        el.style.fill = PARTS[id].defaultFill;
+      });
+    }
+    updateSwatch(id);
+  });
+  if (selected) selectPart(selected);
+}
+
+// ─────────────────────────────────────────────
+// Export
+// ─────────────────────────────────────────────
+function exportSVG() {
+  const svg = document.getElementById('jockey-svg').cloneNode(true);
+  // Remove selection highlight from clone
+  const hl = svg.querySelector('#selection-highlight');
+  if (hl) hl.remove();
+  const blob = new Blob([
+    '<?xml version="1.0" encoding="UTF-8"?>\n' + svg.outerHTML
+  ], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'jockey-design.svg';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+// ─────────────────────────────────────────────
+// Utility
+// ─────────────────────────────────────────────
+function toHex(color) {
+  if (!color || color === 'none') return '#000000';
+  if (color.startsWith('#') && color.length === 7) return color;
+  const tmp = document.createElement('canvas').getContext('2d');
+  tmp.fillStyle = color;
+  const c = tmp.fillStyle; // browser normalizes to #rrggbb
+  return c.length === 7 ? c : color;
+}
+
+// ─────────────────────────────────────────────
+// Build pattern picker UI
+// ─────────────────────────────────────────────
+function buildPatternGrid() {
+  const grid = document.getElementById('pattern-grid');
+  PATTERNS.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'pat-thumb';
+    div.dataset.pat = p.id;
+    div.title = p.label;
+    div.innerHTML = p.icon() + `<span>${p.label}</span>`;
+    div.onclick = () => {
+      if (!selected) return;
+      document.querySelectorAll('.pat-thumb').forEach(b => b.classList.remove('active'));
+      div.classList.add('active');
+      state[selected].patType = p.id;
+      applyFill(selected);
+    };
+    grid.appendChild(div);
+  });
+}
+
+// ─────────────────────────────────────────────
+// Click on SVG parts
+// ─────────────────────────────────────────────
+function setupSVGClicks() {
+  document.querySelectorAll('[data-part]').forEach(g => {
+    g.addEventListener('click', e => {
+      e.stopPropagation();
+      const partId = elementToPart[g.dataset.part] || g.dataset.part;
+      selectPart(partId);
+    });
+  });
+
+  // Click on canvas background deselects
+  document.getElementById('canvas-area').addEventListener('click', () => {
+    if (selected) {
+      document.getElementById('listbtn-' + selected)?.classList.remove('active');
+      selected = null;
+      const hl = document.getElementById('selection-highlight');
+      if (hl) { hl.style.display = 'none'; while (hl.firstChild) hl.removeChild(hl.firstChild); }
+      document.getElementById('no-selection').style.display = 'block';
+      document.getElementById('edit-controls').style.display = 'none';
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+function init() {
+  buildPatternGrid();
+  setupSVGClicks();
+  // Initialize swatches
+  Object.keys(PARTS).forEach(id => updateSwatch(id));
+  // Start on parts tab
+  switchTab('parts');
+}
+
+init();
+
+// ─────────────────────────────────────────────
+// Logo overlay — drag, scale, rotate
+// ─────────────────────────────────────────────
+const logoState = { visible: false, x: 980, y: 820, scale: 18, rot: 0, fill: '#ffffff' };
+
+function updateLogoTransform() {
+  const drag = document.getElementById('logo-drag');
+  if (!drag) return;
+  const s = logoState.scale / 100;
+  // SVG transform order: translate first, then rotate around logo centre (320,206), then scale
+  drag.setAttribute('transform',
+    `translate(${logoState.x},${logoState.y}) rotate(${logoState.rot},320,206) scale(${s})`
+  );
+}
+
+function toggleLogo(show) {
+  logoState.visible = show;
+  document.getElementById('logo-layer').style.display = show ? '' : 'none';
+  document.getElementById('logo-show-btn').classList.toggle('active', show);
+  document.getElementById('logo-hide-btn').classList.toggle('active', !show);
+}
+
+function onLogoColor(val) {
+  logoState.fill = val;
+  document.getElementById('logo-path').style.fill = val;
+}
+
+function onLogoSlider() {
+  logoState.scale = +document.getElementById('logo-scale').value;
+  logoState.rot   = +document.getElementById('logo-rot').value;
+  logoState.x     = +document.getElementById('logo-x').value;
+  logoState.y     = +document.getElementById('logo-y').value;
+  document.getElementById('val-logo-scale').textContent = logoState.scale + '%';
+  document.getElementById('val-logo-rot').textContent   = logoState.rot + '°';
+  document.getElementById('val-logo-x').textContent     = Math.round(logoState.x);
+  document.getElementById('val-logo-y').textContent     = Math.round(logoState.y);
+  updateLogoTransform();
+}
+
+function syncLogoSlidersFromState() {
+  document.getElementById('logo-scale').value = logoState.scale;
+  document.getElementById('logo-rot').value   = logoState.rot;
+  document.getElementById('logo-x').value     = logoState.x;
+  document.getElementById('logo-y').value     = logoState.y;
+  document.getElementById('val-logo-scale').textContent = logoState.scale + '%';
+  document.getElementById('val-logo-rot').textContent   = logoState.rot + '°';
+  document.getElementById('val-logo-x').textContent     = Math.round(logoState.x);
+  document.getElementById('val-logo-y').textContent     = Math.round(logoState.y);
+}
+
+// ── Drag handling ──
+(function setupLogoDrag() {
+  const svg    = document.getElementById('jockey-svg');
+  const drag   = document.getElementById('logo-drag');
+  const hitbox = document.getElementById('logo-hitbox');
+  let dragging = false;
+  let startSVG = null;   // SVG coords at pointer-down
+  let startPos = null;   // logoState {x,y} at pointer-down
+
+  function svgPoint(e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+
+  function onDown(e) {
+    if (!logoState.visible) return;
+    e.stopPropagation();
+    dragging  = true;
+    startSVG  = svgPoint(e);
+    startPos  = { x: logoState.x, y: logoState.y };
+    svg.style.userSelect = 'none';
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+  }
+
+  function onMove(e) {
+    if (!dragging) return;
+    const cur = svgPoint(e);
+    logoState.x = startPos.x + (cur.x - startSVG.x);
+    logoState.y = startPos.y + (cur.y - startSVG.y);
+    updateLogoTransform();
+    syncLogoSlidersFromState();
+  }
+
+  function onUp() {
+    dragging = false;
+    svg.style.userSelect = '';
+    window.removeEventListener('mousemove', onMove);
+    window.removeEventListener('mouseup',   onUp);
+  }
+
+  drag.addEventListener('mousedown', onDown);
+})();
+
+// Hook logo tab into switchTab
+const _origSwitchTab = switchTab;
+// patch: switchTab already handles 'logo' via the generic tab mechanism below
+// Override to handle the logo tab content div
+const origSwitchTab = switchTab;
+window.switchTab = function(name) {
+  // Handle logo tab visibility
+  const logoTab = document.getElementById('tab-logo');
+  if (name === 'logo') {
+    document.getElementById('tab-parts').style.display = 'none';
+    document.getElementById('tab-edit').style.display  = 'none';
+    logoTab.style.display = 'flex';
+    document.getElementById('tab-btn-parts').classList.remove('active');
+    document.getElementById('tab-btn-edit').classList.remove('active');
+    document.getElementById('tab-btn-logo').classList.add('active');
+  } else {
+    logoTab.style.display = 'none';
+    document.getElementById('tab-btn-logo').classList.remove('active');
+    origSwitchTab(name);
+  }
+};
+</script>
+</body>
+</html>
