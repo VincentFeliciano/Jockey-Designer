@@ -980,20 +980,24 @@ function makePatternSVG(id, s) {
 
   switch (s.patType) {
     case 'hstripes': {
-      // objectBoundingBox: tile height = 1/count, stripe height = widthPct * tileH
+      // objectBoundingBox: tile = 1/count; ratio = stripe/(stripe+gap)
       const N = s.stripeCount || 1;
-      const wp = Math.max(0.05, Math.min(0.95, (s.stripeThickness || 50) / 100));
+      const T = Math.max(1, s.stripeThickness || 50);
+      const Sp = Math.max(1, s.stripeSpacing || 50);
+      const ratio = T / (T + Sp);
       w = 1; h = 1 / N;
       inner = `<rect width="1" height="${h}" fill="${c1}"/>
-               <rect x="0" y="0" width="1" height="${h * wp}" fill="${c2}"/>`;
+               <rect x="0" y="0" width="1" height="${h * ratio}" fill="${c2}"/>`;
       break;
     }
     case 'vstripes': {
       const N = s.stripeCount || 1;
-      const wp = Math.max(0.05, Math.min(0.95, (s.stripeThickness || 50) / 100));
+      const T = Math.max(1, s.stripeThickness || 50);
+      const Sp = Math.max(1, s.stripeSpacing || 50);
+      const ratio = T / (T + Sp);
       w = 1 / N; h = 1;
       inner = `<rect width="${w}" height="1" fill="${c1}"/>
-               <rect x="0" y="0" width="${w * wp}" height="1" fill="${c2}"/>`;
+               <rect x="0" y="0" width="${w * ratio}" height="1" fill="${c2}"/>`;
       break;
     }
     case 'dstripes45': {
@@ -1103,6 +1107,43 @@ function buildPatternEl(patId, s) {
   return pat;
 }
 
+// H/V stripe pattern in userSpaceOnUse coords — used for mirror parts (sleeves)
+// so both elements share one pattern at the same scale and look identical
+function buildPatternElUSS(patId, s, refGroup) {
+  const bbox = refGroup.getBBox();
+  const N = s.stripeCount || 1;
+  const T = Math.max(1, s.stripeThickness || 50);
+  const Sp = Math.max(1, s.stripeSpacing || 50);
+  const ratio = T / (T + Sp);
+  const c1 = s.c1, c2 = s.c2;
+
+  let tileW, tileH, inner;
+  if (s.patType === 'hstripes') {
+    tileW = bbox.width;
+    tileH = bbox.height / N;
+    inner = `<rect width="${tileW}" height="${tileH}" fill="${c1}"/>
+             <rect x="0" y="0" width="${tileW}" height="${tileH * ratio}" fill="${c2}"/>`;
+  } else { // vstripes
+    tileW = bbox.width / N;
+    tileH = bbox.height;
+    inner = `<rect width="${tileW}" height="${tileH}" fill="${c1}"/>
+             <rect x="0" y="0" width="${tileW * ratio}" height="${tileH}" fill="${c2}"/>`;
+  }
+
+  const ns = 'http://www.w3.org/2000/svg';
+  const pat = document.createElementNS(ns, 'pattern');
+  pat.setAttribute('id', patId);
+  pat.setAttribute('patternUnits', 'userSpaceOnUse');
+  pat.setAttribute('patternContentUnits', 'userSpaceOnUse');
+  pat.setAttribute('width', tileW);
+  pat.setAttribute('height', tileH);
+  pat.setAttribute('x', bbox.x + s.ox);
+  pat.setAttribute('y', bbox.y + s.oy);
+  if (s.rot) pat.setAttribute('patternTransform', `rotate(${s.rot})`);
+  pat.innerHTML = inner;
+  return pat;
+}
+
 // ─────────────────────────────────────────────
 // Icon SVGs for pattern picker (20x20)
 // ─────────────────────────────────────────────
@@ -1198,13 +1239,22 @@ function applyFill(id) {
     const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     wrapper.id = 'patdef-' + id;
 
+    const isHVStripe = s.patType === 'hstripes' || s.patType === 'vstripes';
+
     groups.forEach((g, i) => {
-      const patId = `pat-${id}-${i}`;
-      // Mirror rotation for every alternate group when mirrorPattern is set
-      const sMirror = (part.mirrorPattern && i > 0)
-        ? Object.assign({}, s, { rot: -s.rot, ox: -s.ox })
-        : s;
-      wrapper.appendChild(buildPatternEl(patId, sMirror));
+      let patId;
+      if (part.mirrorPattern && isHVStripe) {
+        // Share one USS pattern for all sleeve groups — both look identical
+        patId = `pat-${id}-shared`;
+        if (i === 0) wrapper.appendChild(buildPatternElUSS(patId, s, g));
+      } else {
+        patId = `pat-${id}-${i}`;
+        // Mirror rotation/offset for diagonal stripes on alternate groups
+        const sMirror = (part.mirrorPattern && i > 0)
+          ? Object.assign({}, s, { rot: -s.rot, ox: -s.ox })
+          : s;
+        wrapper.appendChild(buildPatternEl(patId, sMirror));
+      }
       g.querySelectorAll('path, ellipse, rect, circle, polygon, polyline').forEach(el => {
         if (part.strokeOnly) el.style.stroke = `url(#${patId})`;
         else el.style.fill = `url(#${patId})`;
@@ -1572,20 +1622,6 @@ function onStripeSlider(prop, val) {
   const num = parseInt(val);
   state[selected][prop] = num;
   const isOBB = state[selected].patType === 'hstripes' || state[selected].patType === 'vstripes';
-  // For OBB stripes, thickness and spacing are complementary (sum = 100%)
-  if (isOBB) {
-    if (prop === 'stripeThickness') {
-      const gap = Math.max(5, Math.min(95, 100 - num));
-      state[selected].stripeSpacing = gap;
-      document.getElementById('stripe-spacing').value = gap;
-      document.getElementById('val-stripe-spacing').textContent = gap + '%';
-    } else if (prop === 'stripeSpacing') {
-      const stripe = Math.max(5, Math.min(95, 100 - num));
-      state[selected].stripeThickness = stripe;
-      document.getElementById('stripe-thickness').value = stripe;
-      document.getElementById('val-stripe-thickness').textContent = stripe + '%';
-    }
-  }
   const labelMap = { stripeCount: 'val-stripe-count', stripeThickness: 'val-stripe-thickness', stripeSpacing: 'val-stripe-spacing' };
   const suffix = (isOBB && (prop === 'stripeThickness' || prop === 'stripeSpacing')) ? '%' : '';
   document.getElementById(labelMap[prop]).textContent = num + suffix;
