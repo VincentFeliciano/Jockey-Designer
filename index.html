@@ -1242,18 +1242,26 @@ function applyFill(id) {
     const isHVStripe = s.patType === 'hstripes' || s.patType === 'vstripes';
 
     groups.forEach((g, i) => {
-      let patId;
-      if (part.mirrorPattern && isHVStripe) {
-        // Share one USS pattern for all sleeve groups — both look identical
-        patId = `pat-${id}-shared`;
-        if (i === 0) wrapper.appendChild(buildPatternElUSS(patId, s, g));
+      const patId = `pat-${id}-${i}`;
+      if (part.mirrorPattern && i > 0) {
+        // Mirror: H/V stripes use USS based on group-0 bbox (same tile size), opposite rotation
+        //         Diagonal stripes swap direction (45↔135) and negate extra rotation
+        if (isHVStripe) {
+          const sMirror = Object.assign({}, s, { rot: -s.rot, ox: -s.ox });
+          wrapper.appendChild(buildPatternElUSS(patId, sMirror, groups[0]));
+        } else {
+          const mirrorType = s.patType === 'dstripes45' ? 'dstripes135'
+                           : s.patType === 'dstripes135' ? 'dstripes45'
+                           : s.patType;
+          const sMirror = Object.assign({}, s, { patType: mirrorType, rot: -s.rot, ox: -s.ox });
+          wrapper.appendChild(buildPatternEl(patId, sMirror));
+        }
       } else {
-        patId = `pat-${id}-${i}`;
-        // Mirror rotation/offset for diagonal stripes on alternate groups
-        const sMirror = (part.mirrorPattern && i > 0)
-          ? Object.assign({}, s, { rot: -s.rot, ox: -s.ox })
-          : s;
-        wrapper.appendChild(buildPatternEl(patId, sMirror));
+        if (part.mirrorPattern && isHVStripe) {
+          wrapper.appendChild(buildPatternElUSS(patId, s, g));
+        } else {
+          wrapper.appendChild(buildPatternEl(patId, s));
+        }
       }
       g.querySelectorAll('path, ellipse, rect, circle, polygon, polyline').forEach(el => {
         if (part.strokeOnly) el.style.stroke = `url(#${patId})`;
