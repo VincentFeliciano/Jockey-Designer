@@ -373,6 +373,16 @@ input[type="range"] {
         style="fill:rgb(255,14,14);stroke:black;stroke-width:0.32px;"/>
     </g>
 
+    <!-- Buttons — 6 circles over the shirt front -->
+    <g id="part-buttons" data-part="buttons">
+      <g transform="matrix(1,0,0,1,-17.6068,1.14731)"><circle cx="1018.36" cy="643.6" r="17.607" style="fill:white;stroke:black;stroke-width:4.17px;"/></g>
+      <g transform="matrix(1,0,0,1,-35.2137,138.825)"><circle cx="1018.36" cy="643.6" r="17.607" style="fill:white;stroke:black;stroke-width:4.17px;"/></g>
+      <g transform="matrix(1,0,0,1,-35.2137,245.525)"><circle cx="1018.36" cy="643.6" r="17.607" style="fill:white;stroke:black;stroke-width:4.17px;"/></g>
+      <g transform="matrix(1,0,0,1,-35.2137,362.551)"><circle cx="1018.36" cy="643.6" r="17.607" style="fill:white;stroke:black;stroke-width:4.17px;"/></g>
+      <g transform="matrix(1,0,0,1,-27.1825,478.43)"><circle cx="1018.36" cy="643.6" r="17.607" style="fill:white;stroke:black;stroke-width:4.17px;"/></g>
+      <g transform="matrix(1,0,0,1,-17.6068,596.603)"><circle cx="1018.36" cy="643.6" r="17.607" style="fill:white;stroke:black;stroke-width:4.17px;"/></g>
+    </g>
+
     <!-- Right Sleeve -->
     <g id="part-rsleeve" data-part="rsleeve">
       <path d="M731.339,555.845C728.25,631.544 746.925,705.264 786.913,777.047C754.161,836.999 716.253,891.794 671.264,939.507C697.704,998.449 721.569,1048.96 739.185,1079.02C688.694,1083.92 642.257,1099.51 600.589,1127.67C585.822,1074.12 491.042,962.464 491.042,885.354C481.685,827.823 623.521,590.505 731.339,555.845Z"
@@ -551,6 +561,7 @@ input[type="range"] {
     <div class="part-group-label">Upper Body</div>
     <button class="part-btn" id="listbtn-collar" onclick="selectPart('collar')"><span class="part-swatch" id="sw-collar"></span>Collar</button>
     <button class="part-btn" id="listbtn-shirt" onclick="selectPart('shirt')"><span class="part-swatch" id="sw-shirt"></span>Shirt</button>
+    <button class="part-btn" id="listbtn-buttons" onclick="selectPart('buttons')"><span class="part-swatch" id="sw-buttons"></span>Buttons</button>
     <button class="part-btn" id="listbtn-sleeves" onclick="selectPart('sleeves')"><span class="part-swatch" id="sw-sleeves"></span>Sleeves</button>
     <button class="part-btn" id="listbtn-shirtcuffs" onclick="selectPart('shirtcuffs')"><span class="part-swatch" id="sw-shirtcuffs"></span>Shirt Cuffs</button>
     <button class="part-btn" id="listbtn-lhand" onclick="selectPart('lhand')"><span class="part-swatch" id="sw-lhand"></span>Left Hand</button>
@@ -727,6 +738,7 @@ const PARTS = {
   pants:      { label: 'Pants',          defaultFill: '#ffffff' },
   sleeves:    { label: 'Sleeves',        defaultFill: '#ff0e0e', targets: ['part-rsleeve', 'part-lsleeve'] },
   shirt:      { label: 'Shirt',          defaultFill: '#ff0e0e' },
+  buttons:    { label: 'Buttons',        defaultFill: '#ffffff' },
   collar:     { label: 'Collar',         defaultFill: '#111111' },
   shirtcuffs: { label: 'Shirt Cuffs',   defaultFill: '#111111', targets: ['part-lcuff', 'part-rcuff'] },
   rhand:      { label: 'Right Hand',     defaultFill: '#ffe9ce' },
