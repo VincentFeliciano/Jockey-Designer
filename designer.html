@@ -38,11 +38,56 @@ body {
   background-color: #202040;
   opacity: 0.5;
 }
+#jockey-wrap {
+  transform-origin: center center;
+  transition: none;
+  will-change: transform;
+}
 #jockey-svg {
   position: relative;
   max-height: 90vh;
   max-width: 100%;
   filter: drop-shadow(0 8px 32px rgba(0,0,0,0.7));
+  display: block;
+}
+#canvas-area.panning { cursor: grabbing !important; }
+#canvas-area:not(.panning) { cursor: grab; }
+#canvas-area [data-part] { cursor: pointer; }
+
+/* Zoom controls overlay */
+#zoom-controls {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(10,20,35,0.85);
+  border: 1px solid #1a3a5c;
+  border-radius: 6px;
+  padding: 5px 8px;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+}
+.zoom-btn {
+  width: 26px; height: 26px;
+  border: none;
+  background: #1a3a5c;
+  color: #cde;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s;
+}
+.zoom-btn:hover { background: #2a5a8c; }
+#zoom-label {
+  font-size: 11px;
+  color: #7aaabb;
+  min-width: 38px;
+  text-align: center;
+  font-family: monospace;
 }
 #jockey-svg [data-part] { cursor: pointer; }
 #jockey-svg [data-part]:hover path,
@@ -363,6 +408,13 @@ input[type="range"] {
 
 <div id="canvas-area">
   <div id="canvas-bg"></div>
+  <div id="zoom-controls">
+    <button class="zoom-btn" onclick="zoomStep(1.2)" title="Zoom in">+</button>
+    <span id="zoom-label">100%</span>
+    <button class="zoom-btn" onclick="zoomStep(1/1.2)" title="Zoom out">−</button>
+    <button class="zoom-btn" onclick="resetView()" title="Reset view" style="font-size:13px;">⌖</button>
+  </div>
+  <div id="jockey-wrap">
   <svg id="jockey-svg" viewBox="0 0 2550 3300" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
     <defs id="svg-defs"></defs>
 
@@ -592,6 +644,7 @@ input[type="range"] {
       <use id="sel-use" href="" style="fill:none;stroke:#00d4ff;stroke-width:12px;opacity:0.9;"/>
     </g>
   </svg>
+  </div><!-- /#jockey-wrap -->
 </div>
 
 <!-- ── Side Panel ── -->
@@ -1587,6 +1640,70 @@ function init() {
 }
 
 init();
+
+// ─────────────────────────────────────────────
+// Zoom & Pan
+// ─────────────────────────────────────────────
+const viewState = { zoom: 1, tx: 0, ty: 0 };
+
+function applyViewTransform() {
+  document.getElementById('jockey-wrap').style.transform =
+    `translate(${viewState.tx}px, ${viewState.ty}px) scale(${viewState.zoom})`;
+  document.getElementById('zoom-label').textContent = Math.round(viewState.zoom * 100) + '%';
+}
+
+function zoomStep(factor) {
+  viewState.zoom = Math.max(0.1, Math.min(8, viewState.zoom * factor));
+  applyViewTransform();
+}
+
+function resetView() {
+  viewState.zoom = 1; viewState.tx = 0; viewState.ty = 0;
+  applyViewTransform();
+}
+
+(function initZoomPan() {
+  const area = document.getElementById('canvas-area');
+  let panning = false, panStartX = 0, panStartY = 0, panOriginTx = 0, panOriginTy = 0, moved = false;
+
+  // Wheel to zoom toward cursor
+  area.addEventListener('wheel', e => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.1 : 1/1.1;
+    const rect = area.getBoundingClientRect();
+    const cx = e.clientX - rect.left - rect.width / 2;
+    const cy = e.clientY - rect.top  - rect.height / 2;
+    viewState.tx = cx * (1 - factor) + viewState.tx * factor;
+    viewState.ty = cy * (1 - factor) + viewState.ty * factor;
+    viewState.zoom = Math.max(0.1, Math.min(8, viewState.zoom * factor));
+    applyViewTransform();
+  }, { passive: false });
+
+  // Drag to pan (only when not starting on a part or logo)
+  area.addEventListener('mousedown', e => {
+    if (e.target.closest('[data-part]') || e.target.closest('#logo-drag')) return;
+    if (e.button !== 0) return;
+    panning = true; moved = false;
+    panStartX = e.clientX; panStartY = e.clientY;
+    panOriginTx = viewState.tx; panOriginTy = viewState.ty;
+    area.classList.add('panning');
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!panning) return;
+    const dx = e.clientX - panStartX, dy = e.clientY - panStartY;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+    if (!moved) return;
+    viewState.tx = panOriginTx + dx;
+    viewState.ty = panOriginTy + dy;
+    applyViewTransform();
+  });
+
+  document.addEventListener('mouseup', () => {
+    panning = false;
+    area.classList.remove('panning');
+  });
+})();
 
 // ─────────────────────────────────────────────
 // Logo overlay — drag, scale, rotate
