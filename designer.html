@@ -479,8 +479,25 @@ input[type="range"] {
         style="fill:rgb(255,70,70);stroke:black;stroke-width:0.32px;"/>
     </g>
 
-    <!-- Shadows / detail lines — always on top, non-interactive -->
-    <g id="shadows" style="pointer-events:none;fill:none;stroke:black;">
+    <!-- Logo overlay — draggable, above everything except the selection highlight -->
+    <g id="logo-layer" style="display:none;">
+      <g id="logo-drag" transform="translate(980,820) rotate(0) scale(0.18)"
+         style="cursor:move;" >
+        <!-- saratogaLogo path with combined transform:
+             matrix(12.9698) × translate(-45.5047,15.3387) × translate(-899.236,-939.551)
+             = matrix(12.9698,0,0,12.9698,-1489.255,-740.605) -->
+        <g transform="matrix(12.9698,0,0,12.9698,-1489.255,-740.605)">
+          <path id="logo-path"
+            d="M140.145,57.103L114.838,83.093L114.838,86.059C114.838,89.519 120.752,89.519 120.752,86.059L120.752,83.283L138.205,60.62L126.094,83.188L126.094,86.059C126.094,89.424 132.102,89.253 132.102,86.059L132.102,83.188L139.498,60.449L136.721,83.188L136.721,86.059C136.721,89.747 143.282,89.747 143.282,86.059L143.282,83.169L140.6,60.62L147.996,83.188L147.996,86.059C147.996,89.443 153.623,89.652 153.623,86.059L153.623,83.188L141.988,60.62L158.699,83.188L158.699,86.059C158.699,89.652 164.252,89.652 164.252,86.059L164.252,83.169L140.145,57.103Z"
+            style="fill:#ffffff;stroke:none;"/>
+        </g>
+        <!-- Hit-area rect so empty space inside logo is also draggable -->
+        <rect id="logo-hitbox" x="0" y="0" width="641" height="412" fill="transparent"/>
+      </g>
+    </g>
+
+    <!-- Shadows / detail lines — on top of everything, non-interactive -->
+    <g id="shadows" style="pointer-events:none;fill:black;stroke:black;">
       <g transform="matrix(6.55383,0,0,6.55383,-8815.19,-4724.91)">
         <path d="M1501.96,756.104L1505.8,753.764L1512.34,753.764L1512.34,751.518L1505.3,751.893L1501.96,756.104Z" style="stroke-width:0.06px;"/>
         <path d="M1522.02,751.643L1521.93,753.811L1525.86,753.983L1526.76,754.794L1525.95,752.173L1522.02,751.643Z" style="stroke-width:0.06px;"/>
@@ -508,23 +525,6 @@ input[type="range"] {
       </g>
       <g transform="matrix(10.1484,-3.21831,2.69531,8.4992,-16539.3,-1899.56)">
         <path d="M1474.76,893.082C1478.11,898.826 1487.17,906.099 1502.38,903.975C1491.04,900.141 1480.28,899.12 1474.76,893.082Z" style="stroke-width:0.04px;"/>
-      </g>
-    </g>
-
-    <!-- Logo overlay — draggable, above everything except the selection highlight -->
-    <g id="logo-layer" style="display:none;">
-      <g id="logo-drag" transform="translate(980,820) rotate(0) scale(0.18)"
-         style="cursor:move;" >
-        <!-- saratogaLogo path with combined transform:
-             matrix(12.9698) × translate(-45.5047,15.3387) × translate(-899.236,-939.551)
-             = matrix(12.9698,0,0,12.9698,-1489.255,-740.605) -->
-        <g transform="matrix(12.9698,0,0,12.9698,-1489.255,-740.605)">
-          <path id="logo-path"
-            d="M140.145,57.103L114.838,83.093L114.838,86.059C114.838,89.519 120.752,89.519 120.752,86.059L120.752,83.283L138.205,60.62L126.094,83.188L126.094,86.059C126.094,89.424 132.102,89.253 132.102,86.059L132.102,83.188L139.498,60.449L136.721,83.188L136.721,86.059C136.721,89.747 143.282,89.747 143.282,86.059L143.282,83.169L140.6,60.62L147.996,83.188L147.996,86.059C147.996,89.443 153.623,89.652 153.623,86.059L153.623,83.188L141.988,60.62L158.699,83.188L158.699,86.059C158.699,89.652 164.252,89.652 164.252,86.059L164.252,83.169L140.145,57.103Z"
-            style="fill:#ffffff;stroke:none;"/>
-        </g>
-        <!-- Hit-area rect so empty space inside logo is also draggable -->
-        <rect id="logo-hitbox" x="0" y="0" width="641" height="412" fill="transparent"/>
       </g>
     </g>
 
