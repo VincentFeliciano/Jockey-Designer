@@ -85,6 +85,7 @@ body {
   font-family: monospace;
 }
 #jockey-svg [data-part] { cursor: pointer; }
+#jockey-svg [data-part].pattern-draggable { cursor: grab; }
 #jockey-svg [data-part]:hover path,
 #jockey-svg [data-part]:hover ellipse { opacity: 0.85; }
 
@@ -347,6 +348,21 @@ input[type="color"] {
   color: #aaa;
   padding: 1px;
 }
+/* Logo picker cells */
+.logo-thumb {
+  border: 2px solid #1a3a5c;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #0a1520;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 4px;
+  transition: border-color 0.12s;
+  font-size: 10px; color: #8ab; text-align: center;
+}
+.logo-thumb:hover { border-color: #3a6a9a; }
+.logo-thumb.active { border-color: #e74c3c; }
+.logo-thumb svg { width: 70px; height: 45px; display: block; }
+.logo-thumb.none-thumb { justify-content: center; min-height: 60px; font-size: 12px; color: #556; }
 
 /* Sliders */
 .slider-row {
@@ -586,16 +602,9 @@ input[type="range"] {
 
     <!-- Logo overlay — draggable, above everything except the selection highlight -->
     <g id="logo-layer" style="display:none;">
-      <g id="logo-drag" transform="translate(980,820) rotate(0) scale(0.18)"
-         style="cursor:move;" >
-        <!-- saratogaLogo path with combined transform:
-             matrix(12.9698) × translate(-45.5047,15.3387) × translate(-899.236,-939.551)
-             = matrix(12.9698,0,0,12.9698,-1489.255,-740.605) -->
-        <g transform="matrix(12.9698,0,0,12.9698,-1489.255,-740.605)">
-          <path id="logo-path"
-            d="M140.145,57.103L114.838,83.093L114.838,86.059C114.838,89.519 120.752,89.519 120.752,86.059L120.752,83.283L138.205,60.62L126.094,83.188L126.094,86.059C126.094,89.424 132.102,89.253 132.102,86.059L132.102,83.188L139.498,60.449L136.721,83.188L136.721,86.059C136.721,89.747 143.282,89.747 143.282,86.059L143.282,83.169L140.6,60.62L147.996,83.188L147.996,86.059C147.996,89.443 153.623,89.652 153.623,86.059L153.623,83.188L141.988,60.62L158.699,83.188L158.699,86.059C158.699,89.652 164.252,89.652 164.252,86.059L164.252,83.169L140.145,57.103Z"
-            style="fill:#ffffff;stroke:none;"/>
-        </g>
+      <g id="logo-drag" transform="translate(980,820) rotate(0) scale(0.18)" style="cursor:move;">
+        <!-- Populated dynamically by selectLogo() -->
+        <g id="logo-content"></g>
         <!-- Hit-area rect so empty space inside logo is also draggable -->
         <rect id="logo-hitbox" x="0" y="0" width="641" height="412" fill="transparent"/>
       </g>
@@ -774,17 +783,17 @@ input[type="range"] {
           </div>
           <div class="slider-row">
             <div class="slider-header">
-              <label id="stripe-thickness-label">Width %</label>
-              <span class="val" id="val-stripe-thickness">50</span>
+              <label id="stripe-thickness-label">Width</label>
+              <span class="val" id="val-stripe-thickness">25</span>
             </div>
-            <input type="range" id="stripe-thickness" min="1" max="200" value="50" oninput="onStripeSlider('stripeThickness',this.value)">
+            <input type="range" id="stripe-thickness" min="1" max="90" value="25" oninput="onStripeSlider('stripeThickness',this.value)">
           </div>
           <div class="slider-row" id="stripe-spacing-row">
             <div class="slider-header">
-              <label id="stripe-spacing-label">Spacing</label>
-              <span class="val" id="val-stripe-spacing">50</span>
+              <label id="stripe-spacing-label">Gap</label>
+              <span class="val" id="val-stripe-spacing">25</span>
             </div>
-            <input type="range" id="stripe-spacing" min="2" max="95" value="50" oninput="onStripeSlider('stripeSpacing',this.value)">
+            <input type="range" id="stripe-spacing" min="1" max="90" value="25" oninput="onStripeSlider('stripeSpacing',this.value)">
           </div>
           <hr class="divider">
         </div>
@@ -818,11 +827,8 @@ input[type="range"] {
 
   <!-- Logo tab -->
   <div id="tab-logo" style="display:none; flex:1; overflow-y:auto; padding:12px; flex-direction:column; gap:12px;">
-    <div class="section-label">Visibility</div>
-    <div class="mode-toggle">
-      <button class="mode-btn" id="logo-show-btn" onclick="toggleLogo(true)">Show</button>
-      <button class="mode-btn active" id="logo-hide-btn" onclick="toggleLogo(false)">Hide</button>
-    </div>
+    <div class="section-label">Select Logo</div>
+    <div id="logo-picker" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;"></div>
 
     <hr class="divider">
     <div class="section-label">Fill Color</div>
@@ -941,9 +947,9 @@ Object.keys(PARTS).forEach(id => {
     rot: 0,
     ox: 0,
     oy: 0,
-    stripeCount: 1,
-    stripeThickness: 50,
-    stripeSpacing: 50,
+    stripeCount: 2,
+    stripeThickness: 25,
+    stripeSpacing: 25,
   };
 });
 
@@ -956,16 +962,11 @@ let activeTab = 'parts';
 // Coordinates are in the pre-transform SVG space (~0-200 range units)
 // ─────────────────────────────────────────────
 const PATTERNS = [
-  { id: 'hstripes',    label: 'H. Stripes',   icon: iconHStripes },
-  { id: 'vstripes',    label: 'V. Stripes',   icon: iconVStripes },
-  { id: 'dstripes45',  label: 'Diag 45',      icon: iconDStripes45 },
-  { id: 'dstripes135', label: 'Diag 135',     icon: iconDStripes135 },
+  { id: 'hstripes',    label: 'Stripes',      icon: iconHStripes },
   { id: 'grid',        label: 'Grid',         icon: iconGrid },
   { id: 'squares',     label: 'Squares',      icon: iconSquares },
   { id: 'diamonds',    label: 'Diamonds',     icon: iconDiamonds },
   { id: 'dots',        label: 'Dots',         icon: iconDots },
-  { id: 'herringbone', label: 'Herringbone',  icon: iconHerringbone },
-  { id: 'argyle',      label: 'Argyle',       icon: iconArgyle },
 ];
 
 function makePatternSVG(id, s) {
@@ -988,39 +989,6 @@ function makePatternSVG(id, s) {
       w = 1; h = 1 / N;
       inner = `<rect width="1" height="${h}" fill="${c1}"/>
                <rect x="0" y="0" width="1" height="${h * ratio}" fill="${c2}"/>`;
-      break;
-    }
-    case 'vstripes': {
-      const N = s.stripeCount || 1;
-      const T = Math.max(1, s.stripeThickness || 50);
-      const Sp = Math.max(1, s.stripeSpacing || 50);
-      const ratio = T / (T + Sp);
-      w = 1 / N; h = 1;
-      inner = `<rect width="${w}" height="1" fill="${c1}"/>
-               <rect x="0" y="0" width="${w * ratio}" height="1" fill="${c2}"/>`;
-      break;
-    }
-    case 'dstripes45': {
-      // userSpaceOnUse line-based diagonal — spacing and thickness in SVG units
-      const T = s.stripeThickness || 50;
-      const Sp = s.stripeSpacing || 50;
-      const period = T + Sp;
-      w = period; h = period;
-      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
-               <line x1="${-w}" y1="${h}" x2="${w}" y2="${-h}" stroke="${c2}" stroke-width="${T}"/>
-               <line x1="0"    y1="${h}" x2="${w*2}" y2="${-h}" stroke="${c2}" stroke-width="${T}"/>
-               <line x1="${-w*2}" y1="${h}" x2="0" y2="${-h}" stroke="${c2}" stroke-width="${T}"/>`;
-      break;
-    }
-    case 'dstripes135': {
-      const T = s.stripeThickness || 50;
-      const Sp = s.stripeSpacing || 50;
-      const period = T + Sp;
-      w = period; h = period;
-      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
-               <line x1="0"    y1="0" x2="${w*2}" y2="${h*2}"  stroke="${c2}" stroke-width="${T}"/>
-               <line x1="${-w}" y1="0" x2="${w}"   y2="${h*2}"  stroke="${c2}" stroke-width="${T}"/>
-               <line x1="${w}"  y1="0" x2="${w*3}" y2="${h*2}"  stroke="${c2}" stroke-width="${T}"/>`;
       break;
     }
     case 'grid': {
@@ -1056,25 +1024,6 @@ function makePatternSVG(id, s) {
                <circle cx="${sz/2}" cy="${sz/2}" r="${r}" fill="${c2}"/>`;
       break;
     }
-    case 'herringbone': {
-      w = sz * 2; h = sz * 2;
-      const sw3 = sz * 0.35;
-      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
-               <polyline points="0,${sz} ${sz},0 ${w},${sz}" stroke="${c2}" stroke-width="${sw3}" fill="none" stroke-linejoin="miter"/>
-               <polyline points="0,${h} ${sz},${sz} ${w},${h}" stroke="${c2}" stroke-width="${sw3}" fill="none" stroke-linejoin="miter"/>
-               <polyline points="${-sz},${sz} 0,0 ${sz},${sz}" stroke="${c2}" stroke-width="${sw3}" fill="none" stroke-linejoin="miter"/>
-               <polyline points="${-sz},${h} 0,${sz} ${sz},${h}" stroke="${c2}" stroke-width="${sw3}" fill="none" stroke-linejoin="miter"/>`;
-      break;
-    }
-    case 'argyle': {
-      w = sz * 2; h = sz * 2;
-      const lwa = sz * 0.04;
-      inner = `<rect width="${w}" height="${h}" fill="${c1}"/>
-               <polygon points="${sz},0 ${w},${sz} ${sz},${h} 0,${sz}" fill="${c2}"/>
-               <line x1="${sz}" y1="0" x2="${sz}" y2="${h}" stroke="${c1}" stroke-width="${lwa}"/>
-               <line x1="0" y1="${sz}" x2="${w}" y2="${sz}" stroke="${c1}" stroke-width="${lwa}"/>`;
-      break;
-    }
     default:
       w = sz; h = sz;
       inner = `<rect width="${w}" height="${h}" fill="${c1}"/>`;
@@ -1107,38 +1056,28 @@ function buildPatternEl(patId, s) {
   return pat;
 }
 
-// H/V stripe pattern in userSpaceOnUse coords.
-// stripeThickness and stripeSpacing are fully independent:
-//   ref = bbox dimension / count  (base unit per stripe cycle at default settings)
-//   stripeSize = (T/100) * ref    (absolute width of colored stripe)
-//   gapSize    = (Sp/100) * ref   (absolute gap between stripes)
-//   period     = stripeSize + gapSize  (tile size, changes with gap without affecting stripe)
+// H/V stripe pattern: one tile = full bbox, N stripe rects drawn explicitly.
+// Count = exact N stripes always.
+// Width (%) and Gap (%) are % of bbox dimension — fully independent of each other and count.
+// Adding count duplicates existing stripes at the same absolute size.
 function buildPatternElUSS(patId, s, refGroup) {
   const bbox = refGroup.getBBox();
-  const N = Math.max(1, s.stripeCount || 1);
-  const T  = Math.max(1, s.stripeThickness || 50);
-  const Sp = Math.max(1, s.stripeSpacing   || 50);
-  const c1 = s.c1, c2 = s.c2;
+  const N   = Math.max(1, s.stripeCount    || 2);
+  const T   = Math.max(0.1, s.stripeThickness || 25);  // % of bbox
+  const Sp  = Math.max(0.1, s.stripeSpacing   || 25);  // % of bbox
+  const c1  = s.c1, c2 = s.c2;
 
-  let tileW, tileH, inner;
-  if (s.patType === 'hstripes') {
-    const ref       = bbox.height / N;
-    const stripeH   = (T  / 100) * ref;
-    const gapH      = (Sp / 100) * ref;
-    const period    = stripeH + gapH;
-    tileW = bbox.width;
-    tileH = period;
-    inner = `<rect width="${tileW}" height="${tileH}" fill="${c1}"/>
-             <rect x="0" y="0" width="${tileW}" height="${stripeH}" fill="${c2}"/>`;
-  } else { // vstripes
-    const ref       = bbox.width / N;
-    const stripeW   = (T  / 100) * ref;
-    const gapW      = (Sp / 100) * ref;
-    const period    = stripeW + gapW;
-    tileW = period;
-    tileH = bbox.height;
-    inner = `<rect width="${tileW}" height="${tileH}" fill="${c1}"/>
-             <rect x="0" y="0" width="${stripeW}" height="${tileH}" fill="${c2}"/>`;
+  // Tile = full bbox so pattern tiles exactly once (no unwanted repeats)
+  const tileW = bbox.width;
+  const tileH = bbox.height;
+
+  const stripeH = (T  / 100) * tileH;   // absolute height, independent of N
+  const gapH    = (Sp / 100) * tileH;   // absolute gap, independent of N and stripeH
+  const period  = stripeH + gapH;
+
+  let inner = `<rect width="${tileW}" height="${tileH}" fill="${c1}"/>`;
+  for (let i = 0; i < N; i++) {
+    inner += `<rect x="0" y="${i * period}" width="${tileW}" height="${stripeH}" fill="${c2}"/>`;
   }
 
   const ns = 'http://www.w3.org/2000/svg';
@@ -1161,19 +1100,6 @@ function buildPatternElUSS(patId, s, refGroup) {
 function iconHStripes() {
   return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/><rect width="20" height="10" fill="#555"/></svg>`;
 }
-function iconVStripes() {
-  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/><rect width="10" height="20" fill="#555"/></svg>`;
-}
-function iconDStripes45() {
-  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
-    <line x1="-5" y1="20" x2="20" y2="-5" stroke="#555" stroke-width="8"/>
-    <line x1="5" y1="25" x2="30" y2="-5" stroke="#555" stroke-width="8"/></svg>`;
-}
-function iconDStripes135() {
-  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
-    <line x1="0" y1="-5" x2="25" y2="20" stroke="#555" stroke-width="8"/>
-    <line x1="-10" y1="-5" x2="15" y2="20" stroke="#555" stroke-width="8"/></svg>`;
-}
 function iconGrid() {
   return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
     <rect x="0" y="0" width="1" height="20" fill="#555"/>
@@ -1195,17 +1121,6 @@ function iconDiamonds() {
 function iconDots() {
   return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
     <circle cx="10" cy="10" r="5" fill="#555"/></svg>`;
-}
-function iconHerringbone() {
-  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
-    <polyline points="0,10 10,0 20,10" stroke="#555" stroke-width="5" fill="none" stroke-linejoin="miter"/>
-    <polyline points="0,20 10,10 20,20" stroke="#555" stroke-width="5" fill="none" stroke-linejoin="miter"/></svg>`;
-}
-function iconArgyle() {
-  return `<svg viewBox="0 0 20 20"><rect width="20" height="20" fill="#fff"/>
-    <polygon points="10,0 20,10 10,20 0,10" fill="#555"/>
-    <line x1="10" y1="0" x2="10" y2="20" stroke="white" stroke-width="0.8"/>
-    <line x1="0" y1="10" x2="20" y2="10" stroke="white" stroke-width="0.8"/></svg>`;
 }
 
 // ─────────────────────────────────────────────
@@ -1236,6 +1151,8 @@ function applyFill(id) {
   if (!groups.length) return;
   const s = state[id];
   const part = PARTS[id];
+  // Cursor hint: grab when in pattern mode so user knows stripes are draggable
+  groups.forEach(g => g.classList.toggle('pattern-draggable', s.mode === 'pattern'));
 
   if (s.mode === 'solid') {
     removePatternDef(id);
@@ -1250,28 +1167,18 @@ function applyFill(id) {
     const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     wrapper.id = 'patdef-' + id;
 
-    const isHVStripe = s.patType === 'hstripes' || s.patType === 'vstripes';
-
     groups.forEach((g, i) => {
       const patId = `pat-${id}-${i}`;
-      if (isHVStripe) {
-        // Always USS for H/V stripes: independent width & gap, same coords as SVG elements
-        // Mirror parts (sleeves): both reference group-0 bbox so stripe sizes match
+      if (STRIPE_PATTERNS.has(s.patType)) {
+        // Stripes: USS so width & gap are independent of coordinate space
+        // Mirror parts (sleeves): reference group-0 bbox so both sleeves match in scale
         const refGroup = part.mirrorPattern ? groups[0] : g;
         const sForGroup = (part.mirrorPattern && i > 0)
           ? Object.assign({}, s, { rot: -s.rot, ox: -s.ox })
           : s;
         wrapper.appendChild(buildPatternElUSS(patId, sForGroup, refGroup));
       } else {
-        // Diagonal stripes: swap direction for mirror parts so sleeves go opposite ways
-        let sMirror = s;
-        if (part.mirrorPattern && i > 0) {
-          const mirrorType = s.patType === 'dstripes45' ? 'dstripes135'
-                           : s.patType === 'dstripes135' ? 'dstripes45'
-                           : s.patType;
-          sMirror = Object.assign({}, s, { patType: mirrorType, rot: -s.rot, ox: -s.ox });
-        }
-        wrapper.appendChild(buildPatternEl(patId, sMirror));
+        wrapper.appendChild(buildPatternEl(patId, s));
       }
       g.querySelectorAll('path, ellipse, rect, circle, polygon, polyline').forEach(el => {
         if (part.strokeOnly) el.style.stroke = `url(#${patId})`;
@@ -1374,27 +1281,43 @@ function selectPart(id) {
 
 function updateSelectionHighlight(id) {
   const hl = document.getElementById('selection-highlight');
-  const u = document.getElementById('sel-use');
-  if (!id) {
-    hl.style.display = 'none';
-    return;
-  }
-  // Clone the shape paths from the part and draw them with a highlight stroke
-  hl.style.display = 'block';
-  // Remove old highlight children (except the use element)
   while (hl.firstChild) hl.removeChild(hl.firstChild);
+  if (!id) { hl.style.display = 'none'; return; }
 
   const groups = getTargetGroups(id);
-  if (!groups.length) return;
-  groups.forEach(srcG => srcG.querySelectorAll('path, ellipse').forEach(origEl => {
-    const clone = origEl.cloneNode(false);
-    clone.style.fill = 'none';
-    clone.style.stroke = '#00d4ff';
-    clone.style.strokeWidth = '3px';
-    clone.style.vectorEffect = 'non-scaling-stroke';
-    clone.style.opacity = '0.9';
-    hl.appendChild(clone);
-  }));
+  if (!groups.length) { hl.style.display = 'none'; return; }
+
+  hl.style.display = 'block';
+  const ns = 'http://www.w3.org/2000/svg';
+
+  // Compute combined bounding box across all target groups
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  groups.forEach(g => {
+    try {
+      const bb = g.getBBox();
+      if (bb.width === 0 && bb.height === 0) return;
+      minX = Math.min(minX, bb.x);
+      minY = Math.min(minY, bb.y);
+      maxX = Math.max(maxX, bb.x + bb.width);
+      maxY = Math.max(maxY, bb.y + bb.height);
+    } catch(e) {}
+  });
+
+  if (!isFinite(minX)) { hl.style.display = 'none'; return; }
+
+  const pad = 6;
+  const rect = document.createElementNS(ns, 'rect');
+  rect.setAttribute('x', minX - pad);
+  rect.setAttribute('y', minY - pad);
+  rect.setAttribute('width',  maxX - minX + pad * 2);
+  rect.setAttribute('height', maxY - minY + pad * 2);
+  rect.setAttribute('fill', 'none');
+  rect.setAttribute('stroke', '#00d4ff');
+  rect.setAttribute('stroke-width', '2');
+  rect.setAttribute('stroke-dasharray', '12 6');
+  rect.setAttribute('vector-effect', 'non-scaling-stroke');
+  rect.setAttribute('rx', '4');
+  hl.appendChild(rect);
 }
 
 // ─────────────────────────────────────────────
@@ -1598,7 +1521,7 @@ function onPatternChange() {
   applyFill(selected);
 }
 
-const STRIPE_PATTERNS = new Set(['hstripes','vstripes','dstripes45','dstripes135']);
+const STRIPE_PATTERNS = new Set(['hstripes']);
 
 function updateStripeControls() {
   if (!selected) return;
@@ -1609,25 +1532,14 @@ function updateStripeControls() {
   document.getElementById('pat-size-row').style.display = show ? 'none' : 'flex';
   if (!show) return;
 
-  const isOBB = s.patType === 'hstripes' || s.patType === 'vstripes';
-  // Count row: only for H/V OBB stripes
-  document.getElementById('stripe-count-row').style.display = isOBB ? 'flex' : 'none';
-  // Spacing row: shown for all stripe types
+  document.getElementById('stripe-count-row').style.display = 'flex';
   document.getElementById('stripe-spacing-row').style.display = 'flex';
-  // Relabel sliders contextually
-  document.getElementById('stripe-thickness-label').textContent = isOBB ? 'Width' : 'Thickness';
-  document.getElementById('stripe-spacing-label').textContent = isOBB ? 'Gap' : 'Spacing';
-  // H/V stripes: independent absolute width & gap (1–200% of ref unit)
-  // Diagonal: raw SVG unit values
+  document.getElementById('stripe-thickness-label').textContent = 'Width';
+  document.getElementById('stripe-spacing-label').textContent = 'Gap';
   const thicknessInput = document.getElementById('stripe-thickness');
   const spacingInput = document.getElementById('stripe-spacing');
-  if (isOBB) {
-    thicknessInput.min = 1; thicknessInput.max = 200;
-    spacingInput.min = 1;   spacingInput.max = 200;
-  } else {
-    thicknessInput.min = 2; thicknessInput.max = 300;
-    spacingInput.min = 2;   spacingInput.max = 300;
-  }
+  thicknessInput.min = 1; thicknessInput.max = 90;
+  spacingInput.min = 1;   spacingInput.max = 90;
 
   document.getElementById('stripe-count').value = s.stripeCount;
   document.getElementById('stripe-thickness').value = s.stripeThickness;
@@ -1641,7 +1553,6 @@ function onStripeSlider(prop, val) {
   if (!selected) return;
   const num = parseInt(val);
   state[selected][prop] = num;
-  const isOBB = state[selected].patType === 'hstripes' || state[selected].patType === 'vstripes';
   const labelMap = { stripeCount: 'val-stripe-count', stripeThickness: 'val-stripe-thickness', stripeSpacing: 'val-stripe-spacing' };
   document.getElementById(labelMap[prop]).textContent = num;
   if (state[selected].mode === 'pattern') applyFill(selected);
@@ -1771,27 +1682,101 @@ function buildPatternGrid() {
 }
 
 // ─────────────────────────────────────────────
-// Click on SVG parts
+// Click on SVG parts — delegated on the SVG root
 // ─────────────────────────────────────────────
 function setupSVGClicks() {
-  document.querySelectorAll('[data-part]').forEach(g => {
-    g.addEventListener('click', e => {
-      e.stopPropagation();
-      const partId = elementToPart[g.dataset.part] || g.dataset.part;
-      selectPart(partId);
-    });
+  const svg = document.getElementById('jockey-svg');
+
+  svg.addEventListener('click', e => {
+    const g = e.target.closest('[data-part]');
+    if (!g) {
+      // Clicked SVG background — deselect
+      if (selected) {
+        document.getElementById('listbtn-' + selected)?.classList.remove('active');
+        selected = null;
+        updateSelectionHighlight(null);
+        document.getElementById('no-selection').style.display = 'block';
+        document.getElementById('edit-controls').style.display = 'none';
+      }
+      return;
+    }
+    if (g._patternDragMoved) return; // suppress click after drag
+    const partId = elementToPart[g.dataset.part] || g.dataset.part;
+    selectPart(partId);
   });
 
-  // Click on canvas background deselects
-  document.getElementById('canvas-area').addEventListener('click', () => {
+  // Canvas area outside SVG also deselects
+  document.getElementById('canvas-area').addEventListener('click', e => {
+    if (e.target.closest('#jockey-svg')) return; // handled above
     if (selected) {
       document.getElementById('listbtn-' + selected)?.classList.remove('active');
       selected = null;
-      const hl = document.getElementById('selection-highlight');
-      if (hl) { hl.style.display = 'none'; while (hl.firstChild) hl.removeChild(hl.firstChild); }
+      updateSelectionHighlight(null);
       document.getElementById('no-selection').style.display = 'block';
       document.getElementById('edit-controls').style.display = 'none';
     }
+  });
+}
+
+// ─────────────────────────────────────────────
+// Drag stripes to reposition pattern offset
+// ─────────────────────────────────────────────
+function setupPatternDrag() {
+  const svg = document.getElementById('jockey-svg');
+  const patDrag = { active: false, partId: null, startSVG: null, startOx: 0, startOy: 0 };
+
+  function svgPt(e) {
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+
+  function isPatternDraggable(partId) {
+    if (!partId || !state[partId]) return false;
+    return state[partId].mode === 'pattern';
+  }
+
+  document.querySelectorAll('[data-part]').forEach(g => {
+    g.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      const partId = elementToPart[g.dataset.part] || g.dataset.part;
+      if (selected !== partId || !isPatternDraggable(partId)) return;
+      g._patternDragMoved = false;
+      patDrag.active  = true;
+      patDrag.partId  = partId;
+      patDrag.startSVG = svgPt(e);
+      patDrag.startOx = state[partId].ox;
+      patDrag.startOy = state[partId].oy;
+      g.style.cursor = 'grabbing';
+    });
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!patDrag.active) return;
+    const cur = svgPt(e);
+    const dx  = cur.x - patDrag.startSVG.x;
+    const dy  = cur.y - patDrag.startSVG.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      // Mark the group so the click handler knows this was a drag
+      const targets = PARTS[patDrag.partId].targets || ['part-' + patDrag.partId];
+      targets.forEach(t => {
+        const el = document.getElementById(t);
+        if (el) el._patternDragMoved = true;
+      });
+    }
+    state[patDrag.partId].ox = patDrag.startOx + dx;
+    state[patDrag.partId].oy = patDrag.startOy + dy;
+    applyFill(patDrag.partId);
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!patDrag.active) return;
+    patDrag.active = false;
+    document.querySelectorAll('[data-part]').forEach(g => { g.style.cursor = ''; });
+    // Clear drag flag after click event has fired
+    setTimeout(() => {
+      document.querySelectorAll('[data-part]').forEach(g => { g._patternDragMoved = false; });
+    }, 50);
   });
 }
 
@@ -1800,7 +1785,9 @@ function setupSVGClicks() {
 // ─────────────────────────────────────────────
 function init() {
   buildPatternGrid();
+  buildLogoPicker();
   setupSVGClicks();
+  setupPatternDrag();
   // Initialize swatches
   Object.keys(PARTS).forEach(id => updateSwatch(id));
   // Initialize canvas color picker
@@ -1885,7 +1872,69 @@ function resetView() {
 // ─────────────────────────────────────────────
 // Logo overlay — drag, scale, rotate
 // ─────────────────────────────────────────────
-const logoState = { visible: false, x: 980, y: 820, scale: 18, rot: 0, fill: '#ffffff' };
+const LOGOS = [
+  {
+    id: 'horseshoe', label: 'Horseshoe',
+    svg: `<path d="M120,20 L120,200 Q120,392 320,392 Q520,392 520,200 L520,20 L450,20 L450,200 Q450,312 320,312 Q190,312 190,200 L190,20 Z"/>`
+  },
+  {
+    id: 'spades', label: 'Spades',
+    svg: `<path d="M320,18 C360,50 470,95 470,175 C470,235 405,265 355,242 C378,288 385,335 415,368 L225,368 C255,335 262,288 285,242 C235,265 170,235 170,175 C170,95 280,50 320,18 Z"/>`
+  },
+  {
+    id: 'diamond', label: 'Diamond',
+    svg: `<path d="M320,18 L618,206 L320,394 L22,206 Z"/>`
+  },
+  {
+    id: 'saratoga', label: 'Saratoga',
+    svg: `<g transform="matrix(12.9698,0,0,12.9698,-1489.255,-740.605)"><path d="M140.145,57.103L114.838,83.093L114.838,86.059C114.838,89.519 120.752,89.519 120.752,86.059L120.752,83.283L138.205,60.62L126.094,83.188L126.094,86.059C126.094,89.424 132.102,89.253 132.102,86.059L132.102,83.188L139.498,60.449L136.721,83.188L136.721,86.059C136.721,89.747 143.282,89.747 143.282,86.059L143.282,83.169L140.6,60.62L147.996,83.188L147.996,86.059C147.996,89.443 153.623,89.652 153.623,86.059L153.623,83.188L141.988,60.62L158.699,83.188L158.699,86.059C158.699,89.652 164.252,89.652 164.252,86.059L164.252,83.169L140.145,57.103Z"/></g>`
+  },
+];
+
+const logoState = { currentLogo: null, x: 980, y: 820, scale: 18, rot: 0, fill: '#ffffff' };
+
+function buildLogoPicker() {
+  const picker = document.getElementById('logo-picker');
+  // None cell
+  const noneCell = document.createElement('div');
+  noneCell.className = 'logo-thumb none-thumb active';
+  noneCell.dataset.logo = 'none';
+  noneCell.textContent = '✕ None';
+  noneCell.onclick = () => selectLogo(null);
+  picker.appendChild(noneCell);
+
+  LOGOS.forEach(logo => {
+    const cell = document.createElement('div');
+    cell.className = 'logo-thumb';
+    cell.dataset.logo = logo.id;
+    cell.innerHTML = `<svg viewBox="0 0 641 412" style="fill:#aabbcc;">${logo.svg}</svg><span>${logo.label}</span>`;
+    cell.onclick = () => selectLogo(logo.id);
+    picker.appendChild(cell);
+  });
+}
+
+function selectLogo(id) {
+  logoState.currentLogo = id;
+  // Update picker active state
+  document.querySelectorAll('.logo-thumb').forEach(c => {
+    c.classList.toggle('active', c.dataset.logo === (id || 'none'));
+  });
+  const layer = document.getElementById('logo-layer');
+  const content = document.getElementById('logo-content');
+  if (!id) {
+    layer.style.display = 'none';
+    return;
+  }
+  const logo = LOGOS.find(l => l.id === id);
+  if (!logo) return;
+  content.innerHTML = logo.svg;
+  // Apply current fill color
+  content.querySelectorAll('path, polygon, rect, ellipse, circle').forEach(el => {
+    el.style.fill = logoState.fill;
+    el.style.stroke = 'none';
+  });
+  layer.style.display = '';
+}
 
 function updateLogoTransform() {
   const drag = document.getElementById('logo-drag');
@@ -1897,16 +1946,11 @@ function updateLogoTransform() {
   );
 }
 
-function toggleLogo(show) {
-  logoState.visible = show;
-  document.getElementById('logo-layer').style.display = show ? '' : 'none';
-  document.getElementById('logo-show-btn').classList.toggle('active', show);
-  document.getElementById('logo-hide-btn').classList.toggle('active', !show);
-}
-
 function onLogoColor(val) {
   logoState.fill = val;
-  document.getElementById('logo-path').style.fill = val;
+  document.getElementById('logo-content')
+    .querySelectorAll('path, polygon, rect, ellipse, circle')
+    .forEach(el => { el.style.fill = val; });
 }
 
 function onLogoSlider() {
@@ -1949,7 +1993,7 @@ function syncLogoSlidersFromState() {
   }
 
   function onDown(e) {
-    if (!logoState.visible) return;
+    if (!logoState.currentLogo) return;
     e.stopPropagation();
     dragging  = true;
     startSVG  = svgPoint(e);
