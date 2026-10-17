@@ -1,0 +1,11 @@
+# Local agent/tool settings — contains credentials, never commit
+.claude/
+*.local.json
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
+
+# Agent verification scratch
+_oc_*.py
+oc_*.html
