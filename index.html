@@ -934,10 +934,9 @@ Object.keys(PARTS).forEach(id => {
   targets.forEach(t => { elementToPart[t.replace('part-', '')] = id; });
 });
 
-// Per-part state
-const state = {};
-Object.keys(PARTS).forEach(id => {
-  state[id] = {
+// Per-part state — defaultState() is the single source of truth, shared with resetAll()
+function defaultState(id) {
+  return {
     mode: 'solid',
     solidColor: PARTS[id].defaultFill,
     patType: 'hstripes',
@@ -951,6 +950,11 @@ Object.keys(PARTS).forEach(id => {
     stripeThickness: 25,
     stripeSpacing: 25,
   };
+}
+
+const state = {};
+Object.keys(PARTS).forEach(id => {
+  state[id] = defaultState(id);
 });
 
 let selected = null;
@@ -1605,25 +1609,10 @@ function switchTab(name) {
 // ─────────────────────────────────────────────
 function resetAll() {
   Object.keys(PARTS).forEach(id => {
-    state[id] = {
-      mode: 'solid',
-      solidColor: PARTS[id].defaultFill,
-      patType: 'hstripes',
-      c1: '#ffffff',
-      c2: '#cc0000',
-      size: 20,
-      rot: 0,
-      ox: 0,
-      oy: 0,
-    };
-    removePatternDef(id);
-    const g = document.getElementById('part-' + id);
-    if (g) {
-      g.querySelectorAll('path, ellipse').forEach(el => {
-        el.style.fill = PARTS[id].defaultFill;
-      });
-    }
-    updateSwatch(id);
+    state[id] = defaultState(id);
+    // applyFill handles every target group, strokeOnly parts, the full element set
+    // and the pattern-draggable class — the manual fill loop only ever hit part-<id>.
+    applyFill(id);
   });
   if (selected) selectPart(selected);
 }
