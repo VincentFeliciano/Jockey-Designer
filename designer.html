@@ -977,24 +977,12 @@ function makePatternSVG(id, s) {
   const sz = s.size;
   const c1 = s.c1;
   const c2 = s.c2;
-  const ox = s.ox;
-  const oy = s.oy;
-  const rot = s.rot;
 
   let w, h, inner;
 
   switch (s.patType) {
-    case 'hstripes': {
-      // objectBoundingBox: tile = 1/count; ratio = stripe/(stripe+gap)
-      const N = s.stripeCount || 1;
-      const T = Math.max(1, s.stripeThickness || 50);
-      const Sp = Math.max(1, s.stripeSpacing || 50);
-      const ratio = T / (T + Sp);
-      w = 1; h = 1 / N;
-      inner = `<rect width="1" height="${h}" fill="${c1}"/>
-               <rect x="0" y="0" width="1" height="${h * ratio}" fill="${c2}"/>`;
-      break;
-    }
+    // Stripes are not built here: applyFill routes STRIPE_PATTERNS through
+    // buildPatternElUSS so stripe width and gap stay independent of the tile.
     case 'grid': {
       w = sz; h = sz;
       const lw = Math.max(sz * 0.08, 0.5);
@@ -1042,25 +1030,15 @@ function buildPatternEl(patId, s) {
   const pat = document.createElementNS(ns, 'pattern');
   pat.setAttribute('id', patId);
   pat.setAttribute('patternUnits', 'userSpaceOnUse');
+  pat.setAttribute('patternContentUnits', 'userSpaceOnUse');
   pat.setAttribute('width', w);
   pat.setAttribute('height', h);
-  // H/V stripes use objectBoundingBox so count = exact visible stripe count
-  const isOBB = s.patType === 'hstripes' || s.patType === 'vstripes';
-  if (isOBB) {
-    pat.setAttribute('patternUnits', 'objectBoundingBox');
-    pat.setAttribute('patternContentUnits', 'objectBoundingBox');
-    const ox = s.ox / 1000, oy = s.oy / 1000; // fine offset in bbox units
-    pat.setAttribute('patternTransform', `translate(${ox},${oy}) rotate(${s.rot})`);
-  } else {
-    pat.setAttribute('patternUnits', 'userSpaceOnUse');
-    pat.setAttribute('patternContentUnits', 'userSpaceOnUse');
-    pat.setAttribute('patternTransform', `translate(${s.ox},${s.oy}) rotate(${s.rot})`);
-  }
+  pat.setAttribute('patternTransform', `translate(${s.ox},${s.oy}) rotate(${s.rot})`);
   pat.innerHTML = inner;
   return pat;
 }
 
-// H/V stripe pattern: one tile = full bbox, N stripe rects drawn explicitly.
+// Horizontal stripe pattern: one tile = full bbox, N stripe rects drawn explicitly.
 // Count = exact N stripes always.
 // Width (%) and Gap (%) are % of bbox dimension — fully independent of each other and count.
 // Adding count duplicates existing stripes at the same absolute size.
