@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jockey Quote Sheet</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar no-print">
+  <div class="brand">
+    <span class="logo">&#9670;</span>
+    <strong>Quote Sheet</strong>
+    <span id="quoteNo" class="qno">new</span>
+  </div>
+  <div class="actions">
+    <select id="status" class="status-select" title="Status">
+      <option value="draft">Draft</option>
+      <option value="sent">Sent</option>
+      <option value="accepted">Accepted</option>
+      <option value="declined">Declined</option>
+      <option value="invoiced">Invoiced</option>
+      <option value="paid">Paid</option>
+    </select>
+    <button id="btnSave" class="btn primary">Save</button>
+    <button id="btnPrint" class="btn">Print / PDF</button>
+    <button id="btnExport" class="btn">Backup</button>
+    <button id="btnImport" class="btn">Restore</button>
+    <input type="file" id="importFile" accept="application/json,.json" hidden>
+  </div>
+</header>
+
+<div class="app no-print">
+  <aside class="sidebar">
+    <button id="btnNew" class="btn primary block">+ New quote</button>
+    <input id="search" class="search" type="search" placeholder="Search name, jockey, number&hellip;">
+
+    <div class="side-group work-group">
+      <div class="side-head">
+        <span>Working</span>
+        <span id="workCount" class="count">0</span>
+      </div>
+      <ul id="workList" class="qlist work"></ul>
+    </div>
+
+    <div class="side-group prev-group">
+      <button id="prevToggle" class="side-head toggle" type="button" aria-expanded="true">
+        <span>Previous</span>
+        <span id="prevCount" class="count">0</span>
+        <span class="caret">&#9662;</span>
+      </button>
+      <ul id="prevList" class="qlist prev"></ul>
+    </div>
+
+    <div class="side-foot"><span id="savedNote">Ready</span></div>
+  </aside>
+
+  <main class="sheet">
+    <div class="doc-head">
+      <div>
+        <h1>Quote</h1>
+        <div class="meta-row">
+          <label>Number <input id="metaNumber" type="text" readonly></label>
+          <label>Date <input id="metaDate" type="date"></label>
+          <label>Valid until <input id="metaValid" type="date"></label>
+        </div>
+      </div>
+      <div class="head-right">
+        <label>Prepared by <input id="metaPreparedBy" type="text" placeholder="Your name"></label>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2>Photos <span class="hint">drag files in, paste with Ctrl+V, or take a picture on your phone</span></h2>
+      <div id="photoDrop" class="photo-drop">
+        <p>Drop images here</p>
+        <button id="btnAddPhoto" class="btn small">Choose files&hellip;</button>
+        <input id="photoFile" type="file" accept="image/*" multiple hidden>
+      </div>
+      <div id="photoGrid" class="photo-grid"></div>
+    </section>
+
+    <section id="workCard" class="card work-card">
+      <div class="work-head">
+        <h2>Work &amp; progress <span class="hint">pin it, move it along, tick it off</span></h2>
+        <div class="work-actions">
+          <button id="btnPin" class="btn small" type="button">Pin to top</button>
+          <button id="btnComplete" class="btn small" type="button">Mark complete</button>
+        </div>
+      </div>
+
+      <div id="doneBanner" class="done-banner" hidden>
+        <span id="doneText">Complete</span>
+      </div>
+
+      <div id="stageSteps" class="steps" role="group" aria-label="Stage"></div>
+
+      <div class="prog">
+        <div class="prog-bar"><i id="progFill"></i></div>
+        <span id="progText" class="prog-text">No steps yet</span>
+      </div>
+
+      <div class="task-add">
+        <input id="taskInput" type="text" placeholder="Add a step &mdash; cut fabric, embroidery, post out&hellip;">
+        <button id="btnAddTask" class="btn small" type="button">Add</button>
+      </div>
+      <ul id="taskList" class="tasks"></ul>
+    </section>
+
+    <div id="sections"></div>
+
+    <section class="card">
+      <h2>Line items</h2>
+      <table class="items">
+        <thead>
+          <tr>
+            <th>Description</th>
+            <th class="num">Qty</th>
+            <th class="num">Unit</th>
+            <th class="num">Amount</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="itemRows"></tbody>
+      </table>
+      <button id="btnAddItem" class="btn small">+ Add line</button>
+    </section>
+
+    <section class="card">
+      <h2>Notes</h2>
+      <textarea id="notes" rows="4" placeholder="Anything the shop needs to know&hellip;"></textarea>
+      <h3>Follow-up log</h3>
+      <div class="log-add">
+        <input id="logInput" type="text" placeholder="Called about the deposit&hellip;">
+        <button id="btnAddLog" class="btn small">Add</button>
+      </div>
+      <ul id="logList" class="log"></ul>
+    </section>
+  </main>
+
+  <aside class="totals">
+    <h2>Totals</h2>
+    <label class="trow">Subtotal <output id="tSub">$0.00</output></label>
+    <label class="trow">Discount <input id="discount" type="number" step="0.01" value="0"></label>
+    <label class="trow">Tax % <input id="taxRate" type="number" step="0.001" value="0"></label>
+    <label class="trow">Tax <output id="tTax">$0.00</output></label>
+    <div class="trow grand">Total <output id="tTotal">$0.00</output></div>
+    <label class="trow">Deposit <input id="deposit" type="number" step="0.01" value="0"></label>
+    <div class="trow balance">Balance <output id="tBalance">$0.00</output></div>
+    <p class="fine">Saved automatically as you type.</p>
+  </aside>
+</div>
+
+<div id="printSheet" class="print-only"></div>
+
+<script src="js/schema.js"></script>
+<script src="js/store.js"></script>
+<script src="js/photos.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/print.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

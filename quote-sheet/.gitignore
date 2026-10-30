@@ -1,0 +1,8 @@
+# Local backups made while editing — not part of the app
+backups_mine/
+_backup_*/
+
+# Test scratch (screenshots, generated PDFs/images from smoke runs)
+test/*.png
+test/*.pdf
+test/quote_pages/
